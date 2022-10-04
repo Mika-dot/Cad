@@ -10,18 +10,17 @@ using System.Threading;
 using System.Windows.Forms;
 using SharpGL;
 using SharpGL.SceneGraph.Primitives;
+using SharpGL.SceneGraph.Raytracing;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
 
 namespace OpenGL_lesson_CSharp
 {
     public partial class SharpGLForm : Form
     {
-        float rotation = 0.0f;
-        float AngleX = 30;
-        float AngleY = 30;
-        float AngleZ = 0;
+        float AngleX = 0, AngleY = 0;
+        double POSX = 2, POSY = 0, POSZ = 0;
 
-        const float AngleDl = 1;
+        const float Rad = 3.14f / 180f;
 
         public SharpGLForm()
         {
@@ -133,44 +132,96 @@ namespace OpenGL_lesson_CSharp
             //  Преобразование
             gl.Perspective(60.0f, (double)Width / (double)Height, 0.01, 100.0);
 
+
             //  Данная функция позволяет установить камеру и её положение
-            gl.LookAt(AngleX, AngleY, AngleZ,    // Позиция самой камеры
-                       0, 0, 0,     // Направление, куда мы смотрим
+            var dX = Math.Sin(AngleX * Rad) * Math.Cos(AngleY * Rad);
+            var dY = Math.Sin(AngleY * Rad);
+            var dZ = Math.Cos(AngleX * Rad) * Math.Cos(AngleY * Rad);
+
+            gl.LookAt(POSX, POSY, POSZ,    // Позиция самой камеры
+                      POSX + dX,
+                      POSY + dY,
+                      POSZ + dZ,     // Направление, куда мы смотрим
                        0, 1, 0);    // Верх камеры
 
             //  Зададим модель отображения
             gl.MatrixMode(OpenGL.GL_MODELVIEW);
-
-            Console.WriteLine(AngleX + " " + AngleY + " " + AngleZ);
         }
 
+        private void openGLControl_MouseDown(object sender, MouseEventArgs e) => b = true;
+        private void openGLControl_MouseUp(object sender, MouseEventArgs e) => b = false;
+
+        bool b = false;
+        int lX = -1, lY = -1;
+
+        private void SharpGLForm_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (b)
+            {
+                if (lX != -1)
+                {
+                    AngleX += (lX - e.X) / 5f;
+                }
+                if (lY != -1) AngleY += (lY - e.Y) / 5f;
+                //Console.WriteLine($"mouse {lX} {lY}");
+                openGLControl_Resized(sender, e);
+            }
+            lX = e.X;
+            lY = e.Y;
+        }
         private void openGLControl_KeyDown(object sender, KeyEventArgs e)
         {
+            double dX, dY, dZ;
             switch (e.KeyCode)
             {
                 case Keys.W:
-                    AngleX += AngleDl;
+                    dX = Math.Sin(AngleX * Rad) * Math.Cos(AngleY * Rad);
+                    dY = Math.Sin(AngleY * Rad);
+                    dZ = Math.Cos(AngleX * Rad) * Math.Cos(AngleY * Rad);
+                    POSX += dX;
+                    POSY += dY;
+                    POSZ += dZ;
                     break;
                 case Keys.S:
-                    AngleX -= AngleDl;
+                    dX = Math.Sin(AngleX * Rad) * Math.Cos(AngleY * Rad);
+                    dY = Math.Sin(AngleY * Rad);
+                    dZ = Math.Cos(AngleX * Rad) * Math.Cos(AngleY * Rad);
+                    POSX -= dX;
+                    POSY -= dY;
+                    POSZ -= dZ;
                     break;
+
                 case Keys.A:
-                    AngleY += AngleDl;
+                    dX = Math.Sin((AngleX + 90) * Rad) * Math.Cos(AngleY * Rad);
+                    dZ = Math.Cos((AngleX + 90) * Rad) * Math.Cos(AngleY * Rad);
+                    POSX += dX;
+                    POSZ += dZ;
                     break;
                 case Keys.D:
-                    AngleY -= AngleDl;
+                    dX = Math.Sin((AngleX - 90) * Rad) * Math.Cos(AngleY * Rad);
+                    dZ = Math.Cos((AngleX - 90) * Rad) * Math.Cos(AngleY * Rad);
+                    POSX += dX;
+                    POSZ += dZ;
                     break;
-                case Keys.Q:
-                    AngleZ += AngleDl;
+                case Keys.Space:
+                    dX = Math.Sin(AngleX * Rad) * Math.Cos((AngleY - 90) * Rad);
+                    dY = Math.Sin((AngleY - 90) * Rad);
+                    dZ = Math.Cos(AngleX * Rad) * Math.Cos((AngleY - 90) * Rad);
+                    POSX += dX;
+                    POSY += dY;
+                    POSZ += dZ;
                     break;
-                case Keys.E:
-                    AngleZ -= AngleDl;
+                case Keys.Shift:
+                    dX = Math.Sin(AngleX * Rad) * Math.Cos((AngleY + 90) * Rad);
+                    dY = Math.Sin((AngleY + 90) * Rad);
+                    dZ = Math.Cos(AngleX * Rad) * Math.Cos((AngleY + 90) * Rad);
+                    POSX += dX;
+                    POSY += dY;
+                    POSZ += dZ;
                     break;
             }
             //openGLControl.Invalidate();
             openGLControl_Resized(sender, e);
         }
-
-
     }
 }
