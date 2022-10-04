@@ -1,2 +1,3 @@
 # DCad
-University attempt to make CAD entirely on the web.
+Тут просто содержится функции которые мы использовали в проекте на разных стадиях.
+
