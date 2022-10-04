@@ -1,3 +1,6 @@
 # DCad
-University attempt to make CAD entirely on the web.
-gtdgdtfhth
+
+#  Компиляция
+
+
+P.S. Это эксперимент по создания воксельного САПР.
