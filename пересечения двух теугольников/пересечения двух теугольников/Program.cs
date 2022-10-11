@@ -2,9 +2,9 @@
 using System.Numerics;
 
 var triangle1 = new TrianglesIntersection.Triangle(
-    new Vector3(0, 0, 0),
-    new Vector3(1, 0, 0),
-    new Vector3(0, 1, 0)
+    new Vector3(0, 0, 10),
+    new Vector3(1, 0, 10),
+    new Vector3(0, 1, 10)
 );
 var triangle2 = new TrianglesIntersection.Triangle(
     new Vector3(1, 0, 1),
@@ -16,7 +16,7 @@ TrianglesIntersection.Intersection(triangle1, triangle2, out var TransformedTria
 var result = Triangulation.Triangulate(TransformedTriangle1);
 Console.WriteLine();
 
-public class Triangulation: TrianglesIntersection
+public class Triangulation : TrianglesIntersection
 {
     public static Triangle[] Triangulate(in List<Vector3> points)
     {
@@ -76,7 +76,6 @@ public class Triangulation: TrianglesIntersection
 
 public class TrianglesIntersection
 {
-
     public struct Triangle
     {
         public Vector3 p1, p2, p3;
@@ -236,63 +235,216 @@ public class TrianglesIntersection
         return tr.ToArray();
     }
 
-    public static void Intersection(in Triangle triangle1, in Triangle triangle2, out List<Vector3> TransformedTriangle1, out List<Vector3> TransformedTriangle2)
+    private static bool IntersectionCheck(in Triangle triangle1, in Triangle triangle2)
     {
-        Vector3[] Point = PointCheckInside(triangle1, triangle2);
-        Vector3[] Points = PointCheckAll(triangle1, triangle2);
-        TransformedTriangle1 = new List<Vector3>();
-        TransformedTriangle2 = new List<Vector3>();
-        if (Point.Length == 2)
+        float minX1 = float.MaxValue;
+        float minY1 = float.MaxValue;
+        float minZ1 = float.MaxValue;
+
+        float maxX1 = float.MinValue;
+        float maxY1 = float.MinValue;
+        float maxZ1 = float.MinValue;
+
         {
-            TransformedTriangle1.Add(triangle1.p1);
-            TransformedTriangle1.Add(triangle1.p2);
-            TransformedTriangle1.Add(triangle1.p3);
-            TransformedTriangle1.Add(Point[0]);
-            TransformedTriangle1.Add(Point[1]);
-            TransformedTriangle2.Add(triangle2.p1);
-            TransformedTriangle2.Add(triangle2.p2);
-            TransformedTriangle2.Add(triangle2.p3);
-            TransformedTriangle2.Add(Point[0]);
-            TransformedTriangle2.Add(Point[1]);
+            if (minX1 > triangle1.p1.X)
+            {
+                minX1 = triangle1.p1.X;
+            }
+            if (maxX1 < triangle1.p1.X)
+            {
+                maxX1 = triangle1.p1.X;
+            }
+
+            if (minY1 > triangle1.p1.Y)
+            {
+                minY1 = triangle1.p1.Y;
+            }
+            if (maxY1 < triangle1.p1.Y)
+            {
+                maxY1 = triangle1.p1.Y;
+            }
+
+            if (minZ1 > triangle1.p1.Z)
+            {
+                minZ1 = triangle1.p1.Z;
+            }
+            if (maxZ1 < triangle1.p1.Z)
+            {
+                maxZ1 = triangle1.p1.Z;
+            }
+
+
+
+            if (minX1 > triangle1.p2.X)
+            {
+                minX1 = triangle1.p2.X;
+            }
+            if (maxX1 < triangle1.p2.X)
+            {
+                maxX1 = triangle1.p2.X;
+            }
+
+            if (minY1 > triangle1.p2.Y)
+            {
+                minY1 = triangle1.p2.Y;
+            }
+            if (maxY1 < triangle1.p2.Y)
+            {
+                maxY1 = triangle1.p2.Y;
+            }
+
+            if (minZ1 > triangle1.p2.Z)
+            {
+                minZ1 = triangle1.p2.Z;
+            }
+            if (maxZ1 < triangle1.p2.Z)
+            {
+                maxZ1 = triangle1.p2.Z;
+            }
+
+
+            if (minX1 > triangle1.p3.X)
+            {
+                minX1 = triangle1.p3.X;
+            }
+            if (maxX1 < triangle1.p3.X)
+            {
+                maxX1 = triangle1.p3.X;
+            }
+
+            if (minY1 > triangle1.p3.Y)
+            {
+                minY1 = triangle1.p3.Y;
+            }
+            if (maxY1 < triangle1.p3.Y)
+            {
+                maxY1 = triangle1.p3.Y;
+            }
+
+            if (minZ1 > triangle1.p3.Z)
+            {
+                minZ1 = triangle1.p3.Z;
+            }
+            if (maxZ1 < triangle1.p3.Z)
+            {
+                maxZ1 = triangle1.p3.Z;
+            }
         }
 
-        if (Point.Length == 1)
+        float minX2 = float.MaxValue;
+        float minY2 = float.MaxValue;
+        float minZ2 = float.MaxValue;
+
+        float maxX2 = float.MinValue;
+        float maxY2 = float.MinValue;
+        float maxZ2 = float.MinValue;
+
         {
-            TransformedTriangle1.Add(triangle1.p1);
-            TransformedTriangle1.Add(triangle1.p2);
-            TransformedTriangle1.Add(triangle1.p3);
-            TransformedTriangle1.Add(Point[0]);
-
-
-            Vector3? oldpoint = CHECK(Points[0], Points[1], triangle1.p1, triangle1.p2);
-            if (oldpoint != null)
+            if (minX2 > triangle2.p1.X)
             {
-                TransformedTriangle1.Add(oldpoint.Value);
-                TransformedTriangle2.Add(oldpoint.Value);
+                minX2 = triangle2.p1.X;
+            }
+            if (maxX2 < triangle2.p1.X)
+            {
+                maxX2 = triangle2.p1.X;
             }
 
-            oldpoint = CHECK(Points[0], Points[1], triangle1.p3, triangle1.p2);
-            if (oldpoint != null)
+            if (minY2 > triangle2.p1.Y)
             {
-                TransformedTriangle1.Add(oldpoint.Value);
-                TransformedTriangle2.Add(oldpoint.Value);
+                minY2 = triangle2.p1.Y;
+            }
+            if (maxY2 < triangle2.p1.Y)
+            {
+                maxY2 = triangle2.p1.Y;
             }
 
-            oldpoint = CHECK(Points[0], Points[1], triangle1.p1, triangle1.p3);
-            if (oldpoint != null)
+            if (minZ2 > triangle2.p1.Z)
             {
-                TransformedTriangle1.Add(oldpoint.Value);
-                TransformedTriangle2.Add(oldpoint.Value);
+                minZ2 = triangle2.p1.Z;
+            }
+            if (maxZ2 < triangle2.p1.Z)
+            {
+                maxZ2 = triangle2.p1.Z;
             }
 
-            TransformedTriangle2.Add(triangle2.p1);
-            TransformedTriangle2.Add(triangle2.p2);
-            TransformedTriangle2.Add(triangle2.p3);
 
-            TransformedTriangle2.Add(Point[0]);
+
+            if (minX2 > triangle2.p2.X)
+            {
+                minX2 = triangle2.p2.X;
+            }
+            if (maxX2 < triangle2.p2.X)
+            {
+                maxX2 = triangle2.p2.X;
+            }
+
+            if (minY2 > triangle2.p2.Y)
+            {
+                minY2 = triangle2.p2.Y;
+            }
+            if (maxY2 < triangle2.p2.Y)
+            {
+                maxY2 = triangle2.p2.Y;
+            }
+
+            if (minZ2 > triangle2.p2.Z)
+            {
+                minZ2 = triangle2.p2.Z;
+            }
+            if (maxZ2 < triangle2.p2.Z)
+            {
+                maxZ2 = triangle2.p2.Z;
+            }
+
+
+            if (minX2 > triangle2.p3.X)
+            {
+                minX2 = triangle2.p3.X;
+            }
+            if (maxX2 < triangle2.p3.X)
+            {
+                maxX2 = triangle2.p3.X;
+            }
+
+            if (minY2 > triangle2.p3.Y)
+            {
+                minY2 = triangle2.p3.Y;
+            }
+            if (maxY2 < triangle2.p3.Y)
+            {
+                maxY2 = triangle2.p3.Y;
+            }
+
+            if (minZ2 > triangle2.p3.Z)
+            {
+                minZ2 = triangle2.p3.Z;
+            }
+            if (maxZ2 < triangle2.p3.Z)
+            {
+                maxZ2 = triangle2.p3.Z;
+            }
         }
 
 
+        if (
+            (minX1 <= minX2 && minX2 <= maxX1) &&
+            (minY1 <= minY2 && minY2 <= maxY1) &&
+            (minZ1 <= minZ2 && minZ2 <= maxZ1)
+            )
+        {
+            return true;
+        }
+        if (
+           (minX1 <= maxX2 && maxX2 <= maxX1) &&
+           (minY1 <= maxY2 && maxY2 <= maxY1) &&
+           (minZ1 <= maxZ2 && maxZ2 <= maxZ1)
+           )
+        {
+            return true;
+        }
+
+
+        return false;
     }
 
     private static Vector3? CHECK(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4)
@@ -384,6 +536,81 @@ public class TrianglesIntersection
             if (Y > Math.Max(Math.Max(L1p1.Y, L1p2.Y), Math.Max(L2p1.Y, L2p2.Y))) return false;
             return true;
         }
+    }
+
+    public static int Intersection(in Triangle triangle1, in Triangle triangle2, out List<Vector3> TransformedTriangle1, out List<Vector3> TransformedTriangle2)
+    {
+        if (IntersectionCheck(triangle1, triangle2))
+        {
+            TransformedTriangle1 = null;
+            TransformedTriangle2 = null;
+            return 0;
+        }
+
+        Vector3[] Point = PointCheckInside(triangle1, triangle2);
+
+        if (Point.Length == 0)
+        {
+            TransformedTriangle1 = null;
+            TransformedTriangle2 = null;
+            return 0;
+        }
+
+        Vector3[] Points = PointCheckAll(triangle1, triangle2); // Надо проверить!!!
+        TransformedTriangle1 = new List<Vector3>();
+        TransformedTriangle2 = new List<Vector3>();
+
+        if (Point.Length == 2)
+        {
+            TransformedTriangle1.Add(triangle1.p1);
+            TransformedTriangle1.Add(triangle1.p2);
+            TransformedTriangle1.Add(triangle1.p3);
+            TransformedTriangle1.Add(Point[0]);
+            TransformedTriangle1.Add(Point[1]);
+            TransformedTriangle2.Add(triangle2.p1);
+            TransformedTriangle2.Add(triangle2.p2);
+            TransformedTriangle2.Add(triangle2.p3);
+            TransformedTriangle2.Add(Point[0]);
+            TransformedTriangle2.Add(Point[1]);
+        }
+
+        if (Point.Length == 1)
+        {
+            TransformedTriangle1.Add(triangle1.p1);
+            TransformedTriangle1.Add(triangle1.p2);
+            TransformedTriangle1.Add(triangle1.p3);
+            TransformedTriangle1.Add(Point[0]);
+
+
+            Vector3? oldpoint = CHECK(Points[0], Points[1], triangle1.p1, triangle1.p2);
+            if (oldpoint != null)
+            {
+                TransformedTriangle1.Add(oldpoint.Value);
+                TransformedTriangle2.Add(oldpoint.Value);
+            }
+
+            oldpoint = CHECK(Points[0], Points[1], triangle1.p3, triangle1.p2);
+            if (oldpoint != null)
+            {
+                TransformedTriangle1.Add(oldpoint.Value);
+                TransformedTriangle2.Add(oldpoint.Value);
+            }
+
+            oldpoint = CHECK(Points[0], Points[1], triangle1.p1, triangle1.p3);
+            if (oldpoint != null)
+            {
+                TransformedTriangle1.Add(oldpoint.Value);
+                TransformedTriangle2.Add(oldpoint.Value);
+            }
+
+            TransformedTriangle2.Add(triangle2.p1);
+            TransformedTriangle2.Add(triangle2.p2);
+            TransformedTriangle2.Add(triangle2.p3);
+
+            TransformedTriangle2.Add(Point[0]);
+        }
+
+        return 1;
     }
 
 }
