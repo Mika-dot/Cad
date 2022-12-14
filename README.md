@@ -46,7 +46,7 @@ Gcode("test", ref worldX, ref worldY, ref worldZ);
 
 Передаете параметр названия сохраняемого файла.
 
-![Пример генерации gcode](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/2.PNG)
+![Пример генерации gcode](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/3.PNG)
 
 ## Температура
 
@@ -63,7 +63,7 @@ Gcode("test", ref worldX, ref worldY, ref worldZ);
 * Последним идёт двумерный массив. В нём перечислено, в какую точку какая температура идёт. Первые три целых числа - это координаты в пространстве (необязательно, чтобы в этих координатах был объект), четвёртое число - это сама температура.
 На выход выдаётся дробное число. Это технический параметр для отладки.
 
-![Пример температуры](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/3.PNG)
+![Пример температуры](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/2.PNG)
 
 # Компиляция
 
