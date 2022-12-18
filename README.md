@@ -42,7 +42,7 @@ University attempt to make CAD entirely on the web.
 
 - Чем краснее тем больше давление и наоборот
 
-![](Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.001.png)
+![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.001.png)
 
 Блок шнековых модулей
 
@@ -50,7 +50,7 @@ University attempt to make CAD entirely on the web.
 
 Так же для разделения грязной и чистой зоны была введена буферная зона.
 
-![](Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.002.png)
+![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.002.png)
 
 Шнековые модули
 
@@ -91,15 +91,15 @@ University attempt to make CAD entirely on the web.
    1. График износа делали
 1. Логи
 
-![](Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.003.png)
+![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.003.png)
 
 Рис 1
 
-![](Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.004.png)
+![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.004.png)
 
 Рис 2
 
-![](Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.005.png)
+![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.005.png)
 
 Рис 3
 
