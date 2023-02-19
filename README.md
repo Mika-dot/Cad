@@ -47,6 +47,8 @@ Gcode("test", ref worldX, ref worldY, ref worldZ);
 Передаете параметр названия сохраняемого файла.
 
 ![Пример генерации gcode](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/3.PNG)
+![Пример генерации gcode напечатоного](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/4.JPG)
+
 
 ## Температура
 
