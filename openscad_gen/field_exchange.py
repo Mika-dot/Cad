@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -20,17 +19,12 @@ def export_dcad_field(
     density: np.ndarray | None = None,
     stress: np.ndarray | None = None,
     displacement: np.ndarray | None = None,
+    field_linear_ids: np.ndarray | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Path:
-    """Export a compact interchange field for the future unified DCad application.
-
-    Arrays are stored in compressed NPZ. Geometry is described by origin, voxel size and grid shape;
-    masks use the same ijk indexing as the FEM/topology optimizer. Optional scalar/vector fields can
-    be consumed by VoxelCAD or a renderer without parsing OpenSCAD.
-    """
+    """Export the shared DCad volumetric interchange archive."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-
     payload: dict[str, Any] = {
         "format_version": np.asarray([FORMAT_VERSION], dtype=np.int32),
         "origin": np.asarray(voxel_scene.grid.origin, dtype=np.float64),
@@ -49,6 +43,8 @@ def export_dcad_field(
         payload["stress"] = np.asarray(stress, dtype=np.float32)
     if displacement is not None:
         payload["displacement"] = np.asarray(displacement, dtype=np.float32)
+    if field_linear_ids is not None:
+        payload["field_linear_ids"] = np.asarray(field_linear_ids, dtype=np.int64)
 
     manifest = {
         "format": "dcad-field",
@@ -68,7 +64,6 @@ def export_dcad_field(
 
 
 def load_dcad_field(path: str | Path) -> dict[str, Any]:
-    """Load DCad field NPZ and validate the small stable interchange header."""
     with np.load(Path(path), allow_pickle=False) as data:
         result = {name: data[name].copy() for name in data.files if name != "manifest_json"}
         manifest = json.loads(str(data["manifest_json"]))
@@ -81,7 +76,6 @@ def load_dcad_field(path: str | Path) -> dict[str, Any]:
 
 
 def density_vector_to_grid(voxel_scene: VoxelScene, element_voxels: np.ndarray, design_elem_ids: np.ndarray, rho: np.ndarray) -> np.ndarray:
-    """Map optimizer design-element density into the common dense grid indexing."""
     out = np.zeros(voxel_scene.grid.shape, dtype=np.float32)
     if len(design_elem_ids) == 0:
         return out
@@ -90,4 +84,21 @@ def density_vector_to_grid(voxel_scene: VoxelScene, element_voxels: np.ndarray, 
     if ijk.shape[0] != values.shape[0]:
         raise ValueError("rho size does not match design element count")
     out[ijk[:, 0], ijk[:, 1], ijk[:, 2]] = values
+    return out
+
+
+def linear_field_to_grid(shape: tuple[int, int, int], linear_ids: np.ndarray, values: np.ndarray, fill: float = 0.0) -> np.ndarray:
+    """Convert FEM element ids k*nx*ny + i*ny + j to the common dense field indexing."""
+    nx, ny, nz = (int(v) for v in shape)
+    ids = np.asarray(linear_ids, dtype=np.int64).reshape(-1)
+    vals = np.asarray(values, dtype=np.float32).reshape(-1)
+    if ids.size != vals.size:
+        raise ValueError("linear_ids and values must have equal length")
+    out = np.full((nx, ny, nz), float(fill), dtype=np.float32)
+    k = ids // (nx * ny)
+    rem = ids % (nx * ny)
+    i = rem // ny
+    j = rem % ny
+    valid = (i >= 0) & (i < nx) & (j >= 0) & (j < ny) & (k >= 0) & (k < nz)
+    out[i[valid], j[valid], k[valid]] = vals[valid]
     return out
