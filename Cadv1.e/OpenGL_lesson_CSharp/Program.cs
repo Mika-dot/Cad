@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -7,15 +6,14 @@ namespace OpenGL_lesson_CSharp
 {
     static class Program
     {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new SharpGLForm());
+
+            bool legacy = args != null && args.Any(a => string.Equals(a, "--legacy", StringComparison.OrdinalIgnoreCase));
+            Application.Run(legacy ? (Form)new SharpGLForm() : new ModernVoxelDemoForm());
         }
     }
 }
