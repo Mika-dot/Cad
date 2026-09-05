@@ -3,8 +3,10 @@ using NativeManifold = ManifoldNET.Manifold;
 
 namespace DCad.Boolean.Manifold;
 
-public sealed class ManifoldKernel : IModelingKernel
+public sealed class ManifoldKernel : ICapabilityModelingKernel
 {
+    public KernelCapabilities Description => StandardKernelProfiles.ManifoldMesh;
+
     public ISolid Box(double x, double y, double z, bool centered = true) =>
         new ManifoldSolid(NativeManifold.Cube(F(x), F(y), F(z), centered));
 
