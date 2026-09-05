@@ -1,180 +1,121 @@
-# FEM_Voxel — topology optimization & engineering fields for DCad
+# FEM_Voxel
 
-Эта ветка отвечает за расчётное направление будущего DCad: voxel/hexahedral FEM, density-based topology optimization и преобразование расчётных полей обратно в редактируемую геометрию.
+[![FEM Voxel CI](https://github.com/Mika-dot/Cad/actions/workflows/fem-voxel-ci.yml/badge.svg?branch=FEM_Voxel)](https://github.com/Mika-dot/Cad/actions/workflows/fem-voxel-ci.yml)
 
-Главное изменение предыдущей версии — старый жадный алгоритм поштучного удаления вокселей заменён на **SIMP + Optimality Criteria**. В текущем обновлении ветка дополнительно подготовлена к объединению с V1/VoxelCAD и общим renderer.
+Python-прототип, который читает ограниченное подмножество OpenSCAD, строит регулярную воксельную расчётную область, выполняет линейный FEM и меняет плотность проектной области методом SIMP/OC.
 
-## Что уже есть
+![Поток расчёта FEM_Voxel](docs/images/fem-flow.svg)
 
-- density-based SIMP + OC;
-- sensitivity/density filtering;
-- Heaviside projection + continuation;
-- регулярная hexahedral FEM grid;
-- sparse matrix assembly;
-- matrix-free large-system solve;
-- CG / BiCGSTAB / ILU fallback;
-- post-processing с сохранением связности;
-- stress/displacement/compliance metrics;
-- Streamlit UI и CLI;
-- OpenSCAD input/output pipeline;
-- согласованные единицы: mm, N, N/mm² (MPa).
+## Что реализовано
 
-## Новое: DCad field interchange
+- разбор `cube`, `sphere`, `cylinder`, `translate`, `rotate`, `union`, `difference` и простых module-вызовов;
+- аннотации `GD_SCENE` и `GD_ENTITY` для нагрузок, закреплений и ролей объектов;
+- регулярная сетка из восьмиузловых hexa-элементов через scikit-fem;
+- sparse assembly и несколько путей решения линейной системы;
+- SIMP с обновлением Optimality Criteria;
+- фильтрация чувствительности/плотности и Heaviside projection;
+- контроль связности итоговой бинарной маски;
+- Streamlit UI и headless CLI;
+- SCAD, CSV, JSON, PNG, GIF и `final_fields.npz` на выходе.
 
-После штатного расчёта теперь сохраняется:
-
-```text
-final_fields.npz
-```
-
-Это не картинка и не OpenSCAD script, а машинно-читаемое volumetric state:
-
-- grid origin;
-- voxel size;
-- grid shape;
-- design / anchor / load / obstacle / preserve masks;
-- connector mask;
-- density field;
-- von Mises stress field;
-- FEM element ids;
-- JSON manifest с единицами и конфигурацией.
-
-Формат описан в [`docs/DCAD_FIELD_FORMAT.md`](docs/DCAD_FIELD_FORMAT.md).
-
-Именно этот файл должен стать мостом:
-
-```text
-FEM_Voxel
-    |
-    | final_fields.npz
-    v
-VoxelCAD / V1 --------> OpenGL renderer
-    |                         |
-    +---- geometry edits -----+
-```
-
-То есть результат topology optimization теперь можно передавать в общий CAD без парсинга картинок, `final_connector.scad` или внутреннего состояния Streamlit.
-
-## Новое: multi-load API
-
-Добавлен `openscad_gen/multiload.py`.
-
-Он позволяет решать несколько load cases на **одном построенном FEM context**:
-
-```python
-from openscad_gen.multiload import LoadCase, solve_load_cases
-
-cases = [
-    LoadCase("nominal", force_nominal, 1.0),
-    LoadCase("side", force_side, 0.5),
-    LoadCase("reverse", force_reverse, 0.25),
-]
-
-result = solve_load_cases(
-    voxel_scene,
-    ctx,
-    rho_phys,
-    penal=3.0,
-    cases=cases,
-    logger=logger,
-)
-```
-
-Получаются:
-
-- weighted compliance;
-- worst displacement;
-- worst connector von Mises;
-- aggregated design energy для последующего multi-load sensitivity update.
-
-Это foundation для optimization не под один идеальный случай нагрузки, а под реальное семейство режимов.
+Отдельные модули содержат multi-load расчёт, robust projection triplet, KS aggregation и ограничение нависаний. Они ещё не образуют единый multi-constraint цикл оптимизации.
 
 ## Установка
 
+Требуется Python 3.13 для совпадения с CI.
+
 ```bash
+python -m venv .venv
+```
+
+Windows:
+
+```powershell
+.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-## CLI
+Linux/macOS:
 
 ```bash
-python main.py --scene test.scad
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-## UI
+## Запуск
+
+CLI:
+
+```bash
+python main.py --scene path/to/model.scad --output-root output
+```
+
+UI:
 
 ```bash
 streamlit run ui_app.py
 ```
 
-## Основные параметры
+В репозитории пока нет готового `.scad` примера. Без `--scene` программа ищет `test.scad` в текущем каталоге.
 
-- `voxel_size`
-- `target_volume_ratio`
-- `max_displacement`
-- `filter_radius`
-- `penal_max`
-- `density_threshold`
-- `solver`
-- matrix-free thresholds / tolerances
+## Входная модель
 
-Для крупных сеток оставляйте `solver: "auto"`; exploratory runs разумно начинать с voxel 1.5–2.0 mm, затем делать refinement.
+Надёжный режим — файл с явными `GD_ENTITY`-аннотациями. Для каждой сущности можно задать `role`, материал, `fix`, `force`, `connect`, `preserve` и `avoid`.
 
-## Артефакты запуска
+Обычный OpenSCAD без аннотаций поддерживается только как запасной вариант: parser находит последовательность `translate(...) cube|sphere|cylinder` и назначает первой сущности роль anchor, второй obstacle, третьей load. Для инженерного расчёта такую автоматическую интерпретацию нужно проверять вручную.
 
-- `final_connector.scad`
-- `final_scene_preview.scad`
-- **`final_fields.npz`**
-- `metrics.csv`
-- `summary.json`
-- `animation.gif`
-- PNG stress/geometry frames
+Полным интерпретатором OpenSCAD parser не является. Hull, minkowski, polyhedron, import, text, offset и произвольный код не поддерживаются.
 
-## Important note on units
+## Единицы
 
-OpenSCAD geometry здесь считается в **millimeters**, forces — **newtons**, а material stiffness/yield — **N/mm² (MPa)**. Передача SI pascal values в mm-model завышает stiffness примерно на `10^6`.
+| Величина | Единица |
+|---|---|
+| координаты, размеры, перемещения | мм |
+| сила | Н |
+| модуль Юнга, предел текучести, напряжение | Н/мм² = МПа |
+| плотность материала | кг/мм³ |
 
-## Что ещё развивать
+Передача модуля Юнга в паскалях при геометрии в миллиметрах делает модель ошибочно жёсткой примерно в миллион раз.
 
-### Optimization
+## Результаты запуска
 
-1. подключить `MultiLoadResult.aggregated_design_energy` непосредственно в OC/MMA iteration;
-2. добавить MMA/GCMMA backend для нескольких ограничений;
-3. p-norm/KS stress aggregation;
-4. buckling/eigenfrequency constraints;
-5. robust design: erosion/intermediate/dilation projections;
-6. passive solid/void masks как first-class constraints;
-7. symmetry / extrusion / draw-direction manufacturing constraints;
-8. continuation по mesh refinement, а не только penal/beta.
+Каждый запуск создаёт `output/run_YYYYMMDD_HHMMSS/`:
 
-### Solver
+| Файл | Содержимое |
+|---|---|
+| `final_connector.scad` | найденная геометрия коннектора |
+| `final_scene_preview.scad` | сцена для просмотра в OpenSCAD |
+| `final_fields.npz` | grid, masks, density, stress и manifest |
+| `metrics.csv` | метрики итераций |
+| `summary.json` | итоговые численные значения |
+| `status.json` | состояние выполняющегося/завершённого запуска |
+| `frames/*.png`, `animation.gif` | геометрия и напряжения по итерациям |
 
-1. AMG/multigrid preconditioner;
-2. GPU sparse/matrix-free backend;
-3. domain decomposition;
-4. reuse/preconditioner warm-start между соседними optimization iterations;
-5. multi-right-hand-side solve для load cases.
+Описание NPZ: [`docs/DCAD_FIELD_FORMAT.md`](docs/DCAD_FIELD_FORMAT.md).
 
-### Geometry coupling
+## Что проверяет CI
 
-1. density → smooth SDF;
-2. stress/density → variable-thickness lattice/TPMS;
-3. final field → VDB/3MF;
-4. mesh/VoxelCAD boundary conditions;
-5. shared material database.
+CI устанавливает зависимости, компилирует Python-модули и запускает два небольших теста: преобразование линейного поля в grid и функции из `advanced_optimization.py`.
 
-## Роль в едином приложении
+CI не выполняет полный FEM/SIMP прогон, не сравнивает задачу с аналитическим решением и не проверяет Streamlit. Поэтому зелёный workflow подтверждает целостность модулей, но не точность инженерного результата.
 
-`FEM_Voxel` не должен становиться ещё одним CAD UI. Его конечная форма — headless analysis/optimization service/library:
+## Ограничения
 
-```text
-DCad.App
-   |
-   +-- Geometry.Volume / Mesh
-   +-- Analysis.FEM
-   +-- Analysis.Topology      <- FEM_Voxel
-   +-- Fields                 <- density/stress/displacement
-   +-- Rendering
-```
+- только линейная упругость и регулярная voxel/hexa сетка;
+- нет контакта, пластичности, больших деформаций, buckling и eigenfrequency;
+- критерий напряжений не включён как полноценное ограничение OC/MMA;
+- multi-load API не подключён к основному `optimize_connector`;
+- нет верификационного набора задач с известным решением;
+- разрешение напрямую влияет на память, время и ступенчатость границы;
+- экспортированная геометрия требует отдельной проверки перед изготовлением;
+- `final_fields.npz` читается в `Unified-CAD`, но пока не отображается там.
 
-UI лишь задаёт boundary/load/design regions и показывает fields; FEM остаётся отдельным вычислительным модулем.
+## Следующие задачи
+
+1. Добавить маленькую эталонную сцену и полный CI-прогон с допустимыми численными диапазонами.
+2. Подключить несколько load cases к вычислению чувствительности и обновлению плотности.
+3. Добавить MMA/GCMMA для нескольких ограничений.
+4. Зафиксировать версию схемы запроса/ответа с `Unified-CAD`.
+5. Сравнить сеточную сходимость и результат с CalculiX/Code_Aster либо другим проверенным solver.
+
+Дополнительные формулы и заготовки: [`docs/ADVANCED_OPTIMIZATION.md`](docs/ADVANCED_OPTIMIZATION.md).

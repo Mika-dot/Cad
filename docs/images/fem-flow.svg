@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="360" viewBox="0 0 1100 360" role="img" aria-labelledby="title desc">
+  <title id="title">Поток расчёта FEM_Voxel</title><desc id="desc">От OpenSCAD-сцены к сетке, FEM и результатам оптимизации.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="#67e8f9"/></marker></defs>
+  <rect width="1100" height="360" rx="24" fill="#071827"/>
+  <text x="55" y="58" fill="#f0fdfa" font-family="Segoe UI,Arial" font-size="30" font-weight="700">FEM_Voxel: фактический расчётный маршрут</text>
+  <g fill="#103b4c" stroke="#22d3ee" stroke-width="2"><rect x="55" y="115" width="205" height="115" rx="14"/><rect x="310" y="115" width="205" height="115" rx="14"/><rect x="565" y="115" width="205" height="115" rx="14"/><rect x="820" y="115" width="225" height="115" rx="14"/></g>
+  <g fill="#cffafe" font-family="Segoe UI,Arial" text-anchor="middle"><text x="157" y="158" font-size="21" font-weight="700">OpenSCAD</text><text x="157" y="190" font-size="15">разбор сцены</text><text x="412" y="158" font-size="21" font-weight="700">Voxel grid</text><text x="412" y="190" font-size="15">маски и материалы</text><text x="667" y="158" font-size="21" font-weight="700">FEM + SIMP/OC</text><text x="667" y="190" font-size="15">перемещения и плотность</text><text x="932" y="151" font-size="21" font-weight="700">Артефакты</text><text x="932" y="183" font-size="15">NPZ · CSV · JSON</text><text x="932" y="207" font-size="15">SCAD · PNG · GIF</text></g>
+  <g stroke="#67e8f9" stroke-width="3" marker-end="url(#a)"><line x1="260" y1="172" x2="300" y2="172"/><line x1="515" y1="172" x2="555" y2="172"/><line x1="770" y1="172" x2="810" y2="172"/></g>
+  <text x="55" y="292" fill="#94a3b8" font-family="Segoe UI,Arial" font-size="16">Единицы в коде: мм, Н, Н/мм² (МПа). Multi-load API существует отдельно и пока не подключён к основному циклу оптимизации.</text>
+</svg>
