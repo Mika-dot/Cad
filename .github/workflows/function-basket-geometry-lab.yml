@@ -1,0 +1,19 @@
+name: Geometry Regression Lab
+
+on:
+  push:
+    branches: [ "Function-Basket" ]
+  pull_request:
+    paths:
+      - 'ModernGeometryLab/**'
+
+jobs:
+  geometry-regressions:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run deterministic geometry and CSG invariants
+        run: dotnet test ModernGeometryLab/tests/GeometryLab.Tests/GeometryLab.Tests.csproj -c Release

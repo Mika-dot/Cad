@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\DCad.Core\DCad.Core.csproj" />
+    <PackageReference Include="ManifoldNET" Version="1.0.7-alpha" />
+  </ItemGroup>
+</Project>
