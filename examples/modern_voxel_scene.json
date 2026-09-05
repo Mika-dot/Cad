@@ -1,0 +1,16 @@
+{
+  "voxelsPerMm": 1.0,
+  "operations": [
+    { "op": "addBox", "x0": 0, "y0": 0, "z0": 0, "x1": 60, "y1": 40, "z1": 24 },
+    { "op": "subtractBox", "x0": 3, "y0": 3, "z0": 3, "x1": 57, "y1": 37, "z1": 21 },
+    { "op": "addSphere", "cx": 30, "cy": 20, "cz": 24, "radius": 10 },
+    { "op": "subtractCylinderZ", "cx": 30, "cy": 20, "z0": -2, "z1": 38, "radius": 4 },
+    { "op": "addTorusZ", "cx": 30, "cy": 20, "cz": 24, "majorRadius": 14, "minorRadius": 2.5 },
+    { "op": "addCapsule", "ax": 8, "ay": 8, "az": 24, "bx": 52, "by": 32, "bz": 30, "radius": 1.8 },
+    { "op": "addGyroid", "x0": 5, "y0": 5, "z0": 5, "x1": 55, "y1": 35, "z1": 19, "period": 10, "thickness": 1.4 },
+    { "op": "addBccLattice", "x0": 8, "y0": 8, "z0": 24, "x1": 52, "y1": 32, "z1": 36, "cell": 8, "strut": 1.0 },
+    { "op": "close", "iterations": 1, "neighborhood": "6" },
+    { "op": "smooth", "iterations": 1, "threshold": 14 },
+    { "op": "keepLargest" }
+  ]
+}
