@@ -1,0 +1,22 @@
+name: V2 Modern Mesh CI
+
+on:
+  push:
+    branches: [ "V2-Experiment" ]
+  pull_request:
+    branches: [ "V2-Experiment" ]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        run: dotnet build ModernV2/DCad.MeshKernel.csproj -c Release
+      - name: Boolean smoke test
+        run: |
+          dotnet run --project ModernV2/DCad.MeshKernel.csproj -c Release -- /tmp/v2-modern-demo.stl
+          test -s /tmp/v2-modern-demo.stl
