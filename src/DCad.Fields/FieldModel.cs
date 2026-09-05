@@ -7,12 +7,27 @@ public readonly record struct StructuredGrid3d(Vector3d Origin, double VoxelSize
     public int CellCount => checked(Nx * Ny * Nz);
     public Vector3d CellCenter(int i, int j, int k)
         => Origin + new Vector3d((i + .5) * VoxelSize, (j + .5) * VoxelSize, (k + .5) * VoxelSize);
+
+    // Dense fields follow NumPy C-order for shape (nx, ny, nz): k is the fastest axis.
     public int LinearIndex(int i, int j, int k)
+    {
+        if ((uint)i >= (uint)Nx || (uint)j >= (uint)Ny || (uint)k >= (uint)Nz) throw new ArgumentOutOfRangeException();
+        return (i * Ny + j) * Nz + k;
+    }
+    public (int I, int J, int K) FromLinearIndex(int id)
+    {
+        if ((uint)id >= (uint)CellCount) throw new ArgumentOutOfRangeException(nameof(id));
+        int i = id / (Ny * Nz); int rem = id % (Ny * Nz); int j = rem / Nz; int k = rem % Nz;
+        return (i, j, k);
+    }
+
+    // FEM_Voxel uses a historical element id k*nx*ny + i*ny + j. Keep conversion explicit.
+    public int FemElementId(int i, int j, int k)
     {
         if ((uint)i >= (uint)Nx || (uint)j >= (uint)Ny || (uint)k >= (uint)Nz) throw new ArgumentOutOfRangeException();
         return k * Nx * Ny + i * Ny + j;
     }
-    public (int I, int J, int K) FromLinearIndex(int id)
+    public (int I, int J, int K) FromFemElementId(int id)
     {
         if ((uint)id >= (uint)CellCount) throw new ArgumentOutOfRangeException(nameof(id));
         int k = id / (Nx * Ny); int rem = id % (Nx * Ny); int i = rem / Ny; int j = rem % Ny;
