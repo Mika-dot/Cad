@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Карта веток DCad</title><desc id="desc">Восемь экспериментальных веток и их роль относительно Unified-CAD.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7dd3fc"/></marker></defs>
+  <rect width="1200" height="620" rx="28" fill="#0b1220"/>
+  <text x="60" y="65" fill="#f8fafc" font-family="Segoe UI,Arial" font-size="32" font-weight="700">DCad: одна интеграционная ветка, семь источников функций</text>
+  <rect x="425" y="245" width="350" height="130" rx="18" fill="#0ea5e9"/>
+  <text x="600" y="300" text-anchor="middle" fill="#082f49" font-family="Segoe UI,Arial" font-size="30" font-weight="700">Unified-CAD</text>
+  <text x="600" y="338" text-anchor="middle" fill="#082f49" font-family="Segoe UI,Arial" font-size="18">общий .NET 8 каркас</text>
+  <g fill="#172554" stroke="#60a5fa" stroke-width="2" font-family="Segoe UI,Arial" text-anchor="middle">
+    <rect x="55" y="115" width="250" height="90" rx="14"/><rect x="55" y="265" width="250" height="90" rx="14"/><rect x="55" y="415" width="250" height="90" rx="14"/>
+    <rect x="895" y="115" width="250" height="90" rx="14"/><rect x="895" y="265" width="250" height="90" rx="14"/><rect x="895" y="415" width="250" height="90" rx="14"/>
+    <rect x="475" y="485" width="250" height="90" rx="14"/>
+  </g>
+  <g fill="#dbeafe" font-family="Segoe UI,Arial" font-size="20" font-weight="600" text-anchor="middle">
+    <text x="180" y="150">V2-Experiment</text><text x="180" y="179" font-size="15" font-weight="400">полигональная геометрия</text>
+    <text x="180" y="300">VoxelСad</text><text x="180" y="329" font-size="15" font-weight="400">объёмная геометрия</text>
+    <text x="180" y="450">FEM_Voxel</text><text x="180" y="479" font-size="15" font-weight="400">FEM и оптимизация</text>
+    <text x="1020" y="150">OpenGL</text><text x="1020" y="179" font-size="15" font-weight="400">камера и отображение</text>
+    <text x="1020" y="300">Rendering-stl</text><text x="1020" y="329" font-size="15" font-weight="400">STL, аудит, экспорт</text>
+    <text x="1020" y="450">V1-Experiment</text><text x="1020" y="479" font-size="15" font-weight="400">история и воксели</text>
+    <text x="600" y="520">Function-Basket</text><text x="600" y="549" font-size="15" font-weight="400">геометрические тесты</text>
+  </g>
+  <g stroke="#7dd3fc" stroke-width="3" fill="none" marker-end="url(#a)">
+    <path d="M305 160 C370 160 380 245 425 270"/><path d="M305 310 H410"/><path d="M305 460 C370 460 380 375 425 350"/>
+    <path d="M895 160 C830 160 820 245 775 270"/><path d="M895 310 H790"/><path d="M895 460 C830 460 820 375 775 350"/>
+    <path d="M600 485 V395"/>
+  </g>
+  <text x="600" y="600" text-anchor="middle" fill="#94a3b8" font-family="Segoe UI,Arial" font-size="15">Ветки пока не объединены автоматически: карта показывает назначение, а не готовую интеграцию.</text>
+</svg>
