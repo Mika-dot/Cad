@@ -38,6 +38,7 @@
     <Compile Include="SharpGLForm.Designer.cs"><DependentUpon>SharpGLForm.cs</DependentUpon></Compile>
     <Compile Include="Modern\VoxelEngine.cs" />
     <Compile Include="Modern\OperationHistory.cs" />
+    <Compile Include="Modern\VoxelManufacturing.cs" />
     <Compile Include="Modern\ModernVoxelDemoForm.cs"><SubType>Form</SubType></Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -45,7 +46,7 @@
     <Compile Include="Properties\Resources.Designer.cs"><AutoGen>True</AutoGen><DependentUpon>Resources.resx</DependentUpon><DesignTime>True</DesignTime></Compile>
     <EmbeddedResource Include="SharpGLForm.resx"><DependentUpon>SharpGLForm.cs</DependentUpon></EmbeddedResource>
     <None Include="app.config" /><None Include="packages.config" />
-    <None Include="Properties\Settings.settings"><Generator>SettingsSingleFileGenerator</Generator><LastGenOutput>Settings.Designer.cs</LastGenOutput></None>
+    <None Include="Properties\Settings.settings"><Generator>SettingsSingleFileGenerator</Generator><LastGenOutput>Settings.Designer.cs</LastOutput></None>
     <Compile Include="Properties\Settings.Designer.cs"><AutoGen>True</AutoGen><DependentUpon>Settings.settings</DependentUpon><DesignTimeSharedInput>True</DesignTimeSharedInput></Compile>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
