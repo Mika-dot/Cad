@@ -1,59 +1,54 @@
-# DCad — Rendering-STL / mesh I/O & manufacturing geometry
+# Rendering-stl / ModernStl
 
-Эта ветка исторически появилась как часть хакатонного проекта: STL-модели оборудования, SharpGL viewer, графики и ПО станка. Исторические материалы (`Rendering stl/`, `body/`, `bunker hydrodynamics/`, `media/`) сохранены, но ветка теперь получает вторую роль — **общий STL/mesh I/O и validation модуль** будущего DCad.
+[![STL Toolkit CI](https://github.com/Mika-dot/Cad/actions/workflows/stl-toolkit-ci.yml/badge.svg?branch=Rendering-stl)](https://github.com/Mika-dot/Cad/actions/workflows/stl-toolkit-ci.yml)
 
-## ModernStl
+Ветка объединяет историческое WinForms-приложение со станочными моделями и отдельный .NET 8 CLI `ModernStl`. Для новых задач следует использовать `ModernStl`; каталоги `Rendering stl`, `bunker hydrodynamics`, `body` и `media` сохранены как исходные материалы старого проекта.
 
-Современная часть находится в:
+![Конвейер ModernStl](docs/images/stl-pipeline.svg)
 
-```text
-ModernStl/
-├── DCad.StlToolkit.csproj
-├── StlToolkit.cs
-├── StlToolkit.Advanced.cs
-└── Program.cs
+## Возможности ModernStl
+
+- автоматическое распознавание binary/ASCII STL;
+- запись binary/ASCII STL;
+- экспорт OBJ;
+- площадь поверхности, signed-volume по треугольникам и bounds;
+- подсчёт degenerate и duplicate triangles;
+- boundary и non-manifold edges;
+- количество welded vertices, connected components и isolated triangles;
+- диагностика несогласованных направлений рёбер;
+- библиотечная оценка aspect ratio, minimum angle и boundary loops/open chains;
+- базовая очистка: weld, удаление degenerate и duplicate triangles;
+- масштабирование модели;
+- встроенный round-trip self-test на замкнутом кубе.
+
+## Сборка
+
+Требуется .NET 8 SDK.
+
+```bash
+dotnet build ModernStl/DCad.StlToolkit.csproj -c Release
 ```
 
-Это standalone .NET 8 toolkit без зависимости от старого WinForms UI.
-
-### Поддерживается
-
-- auto-detect binary/ASCII STL;
-- binary + ASCII STL write;
-- OBJ export;
-- surface area;
-- enclosed absolute volume;
-- bounding box;
-- degenerate triangle detection;
-- duplicate triangle detection;
-- boundary edge audit;
-- non-manifold edge audit;
-- **unique welded vertex count**;
-- **connected shell/component count**;
-- **isolated triangle components**;
-- **directed edge/winding consistency diagnostics**;
-- tolerance-based vertex welding;
-- basic repair = weld + remove degenerate + remove duplicate faces;
-- scale transform;
-- built-in closed-cube round-trip self-test.
-
 ## CLI
+
+Аудит:
 
 ```bash
 dotnet run --project ModernStl/DCad.StlToolkit.csproj -- model.stl
 ```
 
-Repair:
+Очистка и изменение допуска weld:
 
 ```bash
 dotnet run --project ModernStl/DCad.StlToolkit.csproj -- \
-  broken.stl --repair repaired.stl --weld 0.000001
+  model.stl --repair repaired.stl --weld 0.000001
 ```
 
-OBJ conversion:
+OBJ и ASCII STL:
 
 ```bash
-dotnet run --project ModernStl/DCad.StlToolkit.csproj -- model.stl --obj model.obj
+dotnet run --project ModernStl/DCad.StlToolkit.csproj -- \
+  model.stl --obj model.obj --ascii model-ascii.stl
 ```
 
 Self-test:
@@ -62,64 +57,66 @@ Self-test:
 dotnet run --project ModernStl/DCad.StlToolkit.csproj -- --self-test
 ```
 
-## Почему эта ветка нужна, если V2 уже работает с triangles
+Параметр `--scale N` масштабирует координаты перед анализом и экспортом.
 
-`V2-Experiment` исследует **создание/изменение** mesh и Boolean operations.
-
-`Rendering-stl` должен отвечать за **границу с внешними файлами**:
+## Что выводит аудит
 
 ```text
-external STL/OBJ/3MF
-        |
-        v
-  import + audit + repair
-        |
-        v
- shared indexed mesh
-    |             |
-    v             v
- V2 CSG        OpenGL renderer
-    |
-    v
- voxel/SDF conversion
+triangles
+uniqueVertices
+components
+isolatedComponents
+degenerate
+boundaryEdges
+nonManifoldEdges
+inconsistentDirectedEdges
+duplicateTriangles
+surfaceArea
+absoluteVolume
+bounds
+closedManifold
 ```
 
-Это позволяет не размазывать STL parser, normal repair и manifold checks по нескольким CAD engines.
+`closedManifold` в текущем коде означает только отсутствие degenerate, boundary и non-manifold edges. Несогласованный winding и duplicate triangles выводятся отдельно и не меняют этот флаг.
 
-## Следующие задачи
+Метрики качества треугольников из `StlToolkit.Quality.cs` пока доступны только через API и не печатаются CLI.
 
-1. перейти с triangle soup на общий indexed half-edge mesh DTO;
-2. consistent face orientation propagation по connected shells;
-3. hole boundary loop extraction;
-4. small-hole filling;
-5. self-intersection broad-phase через BVH;
-6. component filtering по volume/area;
-7. mesh simplification;
-8. remeshing и feature-edge preservation;
-9. normal generation: flat/smooth/crease angle;
-10. PLY support;
-11. 3MF support с units/material metadata;
-12. mesh voxelization и SDF conversion;
-13. glTF как viewport/cache формат;
-14. direct adapter в `OpenGL/MeshData`;
-15. manufacturing checks: minimum wall, trapped shells, watertightness, build dimensions.
+## Что делает и чего не делает repair
 
-## Хакатонная часть
+`RepairBasic`:
 
-Старый проект по станку и бункеру не удаляется: он остаётся примером того, откуда выросли STL/rendering эксперименты. Но README теперь отделяет историческое приложение от reusable geometry tooling.
+1. объединяет координаты в пределах quantization tolerance;
+2. удаляет треугольники ниже заданной площади;
+3. удаляет повторные треугольники без учёта их winding.
 
-## Роль в едином DCad
+Он не:
 
-```text
-DCad.IO.Mesh
-   ├── STL import/export       <- эта ветка
-   ├── OBJ/PLY/3MF
-   ├── audit / repair
-   └── mesh normalization
+- закрывает отверстия;
+- исправляет self-intersections;
+- переориентирует оболочки;
+- разделяет пересекающиеся компоненты;
+- выполняет remesh/simplify;
+- проверяет минимальную толщину детали.
 
-DCad.Geometry.Mesh             <- V2
-DCad.Rendering                 <- OpenGL
-DCad.Geometry.Volume           <- V1/VoxelCAD
-```
+## Проверка CI
 
-Именно так старый `Rendering-stl` превращается в полезный самостоятельный subsystem вместо ещё одного отдельного viewer.
+GitHub Actions на Ubuntu собирает проект и запускает self-test: создаёт куб из 12 треугольников, проверяет topology/объём, записывает binary STL и читает его обратно.
+
+В ходе ревизии исправлен stack overflow, возникавший при печати `Vec3d`: автогенерированный `record struct.ToString()` рекурсивно включал вычисляемое свойство `Normalized`.
+
+## Ограничения форматов и чисел
+
+- Binary/ASCII detection основан на совпадении длины файла с `84 + 50 × triangleCount`.
+- STL не хранит единицы; пользователь сам задаёт смысл координат и `--scale`.
+- Аудит использует quantization tolerance; неудачный допуск может как разорвать общий шов, так и слить близкие разные вершины.
+- `absoluteVolume` берётся после суммирования signed volumes; противоположно ориентированные оболочки могут частично компенсироваться.
+- OBJ writer не объединяет вершины и создаёт три вершины на каждый triangle.
+- `StlMesh` остаётся triangle soup, не half-edge/indexed mesh.
+
+## Следующая работа
+
+1. Перенести reader/audit в `Unified-CAD` и использовать общий `Mesh3d`.
+2. Добавить xUnit corpus из повреждённых STL: holes, flipped shells, duplicate faces, self-intersections.
+3. Вывести quality/boundary diagnostics в CLI и JSON-отчёт.
+4. Добавить безопасную ориентацию connected shells и явный отчёт о произведённых изменениях.
+5. После этого рассматривать hole filling, BVH self-intersection и 3MF.

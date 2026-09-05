@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="370" viewBox="0 0 1100 370" role="img" aria-labelledby="title desc">
+  <title id="title">Конвейер ModernStl</title><desc id="desc">Чтение STL, диагностика, базовая очистка и экспорт.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="#fbbf24"/></marker></defs>
+  <rect width="1100" height="370" rx="24" fill="#1b1407"/>
+  <text x="55" y="58" fill="#fffbeb" font-family="Segoe UI,Arial" font-size="30" font-weight="700">ModernStl: чтение, проверка и ограниченная очистка</text>
+  <g fill="#3b2c0d" stroke="#fbbf24" stroke-width="2"><rect x="55" y="120" width="190" height="120" rx="14"/><rect x="300" y="120" width="220" height="120" rx="14"/><rect x="575" y="120" width="220" height="120" rx="14"/><rect x="850" y="120" width="195" height="120" rx="14"/></g>
+  <g fill="#fef3c7" font-family="Segoe UI,Arial" text-anchor="middle"><text x="150" y="163" font-size="21" font-weight="700">STL</text><text x="150" y="196" font-size="15">binary / ASCII</text><text x="410" y="156" font-size="21" font-weight="700">Аудит</text><text x="410" y="187" font-size="14">границы · manifold</text><text x="410" y="210" font-size="14">качество треугольников</text><text x="685" y="156" font-size="21" font-weight="700">Basic repair</text><text x="685" y="187" font-size="14">weld · deduplicate</text><text x="685" y="210" font-size="14">remove degenerate</text><text x="947" y="163" font-size="21" font-weight="700">Вывод</text><text x="947" y="196" font-size="15">STL / OBJ</text></g>
+  <g stroke="#fbbf24" stroke-width="3" marker-end="url(#a)"><line x1="245" y1="180" x2="290" y2="180"/><line x1="520" y1="180" x2="565" y2="180"/><line x1="795" y1="180" x2="840" y2="180"/></g>
+  <text x="55" y="305" fill="#fde68a" font-family="Segoe UI,Arial" font-size="16">Repair не закрывает отверстия, не исправляет самопересечения и не переориентирует оболочки.</text>
+</svg>

@@ -11,6 +11,7 @@ public readonly record struct Vec3d(double X, double Y, double Z)
     public Vec3d Cross(Vec3d b) => new(Y*b.Z-Z*b.Y,Z*b.X-X*b.Z,X*b.Y-Y*b.X);
     public double Length => Math.Sqrt(Dot(this));
     public Vec3d Normalized => Length>1e-15 ? this*(1.0/Length) : default;
+    public override string ToString() => FormattableString.Invariant($"({X:G12}, {Y:G12}, {Z:G12})");
 }
 
 public readonly record struct StlTriangle(Vec3d A, Vec3d B, Vec3d C)
