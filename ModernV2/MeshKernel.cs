@@ -13,6 +13,7 @@ public readonly record struct Vec3d(double X, double Y, double Z)
     public double Length => Math.Sqrt(Dot(this));
     public Vec3d Normalized => Length > 1e-15 ? this/Length : default;
     public static Vec3d Lerp(Vec3d a, Vec3d b, double t) => a+(b-a)*t;
+    public override string ToString() => FormattableString.Invariant($"({X:G12}, {Y:G12}, {Z:G12})");
 }
 
 public sealed class CsgVertex

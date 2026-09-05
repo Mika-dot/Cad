@@ -1,94 +1,84 @@
-# DCad — V2 Experiment / polygon & mesh CAD
+# V2-Experiment
 
-`V2-Experiment` — полигональная линия DCad. В отличие от V1/VoxelCAD, здесь тело описывается явной треугольной поверхностью и булевы операции выполняются над mesh.
+[![V2 Modern Mesh CI](https://github.com/Mika-dot/Cad/actions/workflows/v2-modern-ci.yml/badge.svg?branch=V2-Experiment)](https://github.com/Mika-dot/Cad/actions/workflows/v2-modern-ci.yml)
+[![V2 Integration CI](https://github.com/Mika-dot/Cad/actions/workflows/v2-production-ci.yml/badge.svg?branch=V2-Experiment)](https://github.com/Mika-dot/Cad/actions/workflows/v2-production-ci.yml)
 
-Исторический код `GL/OpenGL_lesson_CSharp/VARcad` сохранён как исходный эксперимент. В нём были реализованы `OR`, `XOR`, разбиение пересекающихся треугольников и ручная триангуляция. Этот код важен как история проекта, но его математическую модель нельзя считать надёжным production kernel: классификация `Triangle.IsInside(...)` использует случайно выбранный луч, геометрия хранится в `float`, а большое количество частных epsilon-проверок делает сложные касания и почти копланарные случаи нестабильными.
+Полигональная линия DCad. Внутри находятся три самостоятельные реализации, поэтому ветку нельзя собирать и описывать как одну программу.
 
-## ModernV2
+![Три слоя V2-Experiment](docs/images/v2-geometry.svg)
 
-Ветка теперь содержит отдельный современный проект:
+## Состав ветки
 
-```text
-ModernV2/
-├── DCad.MeshKernel.csproj
-├── MeshKernel.cs
-├── Program.cs
-└── README.md
-```
+| Каталог | Технология | Статус |
+|---|---|---|
+| `GL/` | .NET Framework, WinForms, SharpGL, `VARcad` | исторический интерфейс и первые OR/XOR алгоритмы |
+| `ModernV2/` | .NET 8, managed BSP CSG | компактная реализация для чтения и экспериментов |
+| `ModernV2/Production/` | .NET 8, ManifoldNET, OpenTK, xUnit | интеграционный прототип, почти полностью дублирующий ранний `Unified-CAD` |
 
-Это новый deterministic reference backend на .NET 8:
+Для дальнейшей разработки приложения следует использовать ветку [`Unified-CAD`](https://github.com/Mika-dot/Cad/tree/Unified-CAD). Эта ветка нужна для сравнения алгоритмов и сохранения истории V2.
 
-- double precision geometry;
-- BSP-based CSG;
-- union / subtraction / intersection;
-- polygon splitting against planes;
-- box/cylinder primitives;
-- surface area, signed volume, bounding box;
-- STL export;
-- headless CLI для тестирования геометрии без UI.
+## Исторический GL
 
-Запуск:
+В `GL/OpenGL_lesson_CSharp/VARcad/VARcad.cs` реализованы ручные операции над треугольниками, классификация точки и перестроение mesh. Вычисления используют `float`, множество локальных epsilon и случайный луч в `Triangle.IsInside(...)`. Такие свойства делают результат зависимым от масштаба и запуска на сложных касаниях.
+
+Снимок XOR из старого интерфейса:
+
+![XOR в историческом интерфейсе](media/xor.png)
+
+Этот код не исправлялся в ходе ревизии: его ценность — воспроизводить старые случаи для regression tests.
+
+## Managed BSP: ModernV2
+
+Реализовано:
+
+- `double`-векторы и polygon/plane BSP;
+- box, cylinder, sphere;
+- union, subtract, intersect;
+- translate, rotate, scale;
+- площадь, signed volume и bounds;
+- mesh audit по boundary/non-manifold edges;
+- ray picking;
+- binary/ASCII STL и OBJ;
+- CLI и встроенный self-test.
+
+Сборка и запуск:
 
 ```bash
-dotnet run --project ModernV2/DCad.MeshKernel.csproj -- result.stl
+dotnet build ModernV2/DCad.MeshKernel.csproj -c Release
+dotnet run --project ModernV2/DCad.MeshKernel.csproj -c Release -- --self-test
+dotnet run --project ModernV2/DCad.MeshKernel.csproj -c Release -- result.stl --obj
 ```
 
-Подробности: [`ModernV2/README.md`](ModernV2/README.md).
+Подробнее: [`ModernV2/README.md`](ModernV2/README.md).
 
-## Что исправляет новый подход
+## Интеграционный каталог Production
 
-Старый алгоритм пытался вручную решать одновременно четыре разные задачи: triangle-triangle intersection, topology reconstruction, inside/outside classification и triangulation. Это сильно усложняет обработку касаний, совпадающих рёбер и копланарных поверхностей.
+Содержит `DCad.Core`, адаптер ManifoldNET, язык `.dcad`, CLI, OpenTK viewer и xUnit. Это снимок полигонального пути, который затем был вынесен в отдельную ветку `Unified-CAD`.
 
-BSP-версия разделяет эти операции через классификацию polygon относительно плоскости и работает детерминированно. Она остаётся reference implementation, а не конечным промышленным ядром.
-
-## Целевая архитектура mesh CAD
-
-В финальном приложении DCad mesh API не должен быть привязан к одному алгоритму:
-
-```text
-                     DCad.Geometry.Mesh API
-                               |
-           +-------------------+-------------------+
-           |                   |                   |
-      Managed BSP        Manifold backend      CGAL backend
-      reference          fast robust mesh      exact/repair
-                                                   |
-                                             OpenCASCADE
-                                             STEP / B-Rep
+```powershell
+cd ModernV2\Production
+dotnet restore DCad.sln
+dotnet test tests\DCad.Tests\DCad.Tests.csproj -c Release
+dotnet run --project src\DCad.Cli\DCad.Cli.csproj -- examples\bracket.dcad result.obj
 ```
 
-Так можно использовать быстрый backend во viewport/interactive CSG, а сложные случаи отправлять в robust/exact backend.
+Подробнее: [`ModernV2/Production/README.md`](ModernV2/Production/README.md).
 
-## Что следует добавить дальше
+## Исправления ревизии
 
-1. **Half-edge indexed mesh** вместо независимых triangles. Это даст явную топологию vertices/edges/faces и дешёвый adjacency.
-2. **BVH/AABB tree** для broad phase. Triangle operations не должны каждый раз перебирать все пары `N × M`.
-3. **Robust predicates** для orientation/intersection и единая tolerance policy.
-4. **Mesh audit/repair**: degenerate faces, non-manifold edges, flipped normals, duplicate vertices, holes, disconnected shells.
-5. **Coplanar merge** после Boolean, чтобы поверхность не распадалась на сотни микротреугольников.
-6. **Remeshing/simplification** с сохранением feature edges.
-7. **Picking / selection / face IDs**, чтобы mesh был пригоден для CAD UI, а не только экспорта.
-8. **Mesh ↔ SDF/Voxel** конвертер для связи с `V1-Experiment` и `VoxelСad`.
-9. **Material/field attributes** на vertex/face/cell.
-10. **STEP/B-Rep bridge** через OpenCASCADE вместо попытки самостоятельно реализовать NURBS/STEP kernel.
+- `ModernV2/DCad.MeshKernel.csproj` больше не захватывает `Production/**/*.cs` через стандартный SDK glob.
+- У `Vec3d` задан явный `ToString()`, чтобы вычисляемое свойство `Normalized` не вызывало рекурсию при печати bounds.
 
-## Представления в едином DCad
+## Ограничения
 
-V2 теперь рассматривается как surface-geometry backend:
+- managed BSP использует фиксированный `CsgPlane.Epsilon = 1e-7`;
+- polygon soup не хранит явную half-edge topology;
+- нет coplanar merge, BVH и self-intersection repair;
+- self-test состоит из нескольких встроенных случаев, а не большого корпуса моделей;
+- каталог `Production` зависит от alpha-пакета ManifoldNET;
+- две современные реализации имеют разные mesh types и не обмениваются объектами;
+- полигональный код дублируется с `Function-Basket` и `Unified-CAD`.
 
-```text
-Parametric / B-Rep
-        |
-        v
- Triangle Mesh <----------> Sparse SDF / Voxels
-        |                        |
-        |                        +--> topology optimization / fields
-        |
-        +--> rendering / picking / STL / 3MF
-```
+## Что переносить дальше
 
-Поэтому V1, V2 и VoxelCAD не нужно сливать в одну гигантскую структуру данных. Им нужен общий scene/geometry interface и явные конвертеры между представлениями.
-
-## Legacy
-
-Старый демонстратор по-прежнему находится в `GL/`. Он сохранён для сравнения алгоритмов и визуальной истории проекта.
+Новые исправления общего ядра следует делать в `Unified-CAD`. Из V2 нужно перенести только минимальные regression cases, на которых старый GL или managed BSP дают неверный результат.

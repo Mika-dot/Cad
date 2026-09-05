@@ -1,44 +1,37 @@
-# DCad V2 — polygon / triangle CAD
+# ModernV2 — managed BSP CSG
 
-`V2-Experiment` теперь имеет два современных слоя рядом с исходным историческим `GL/`.
+![Место ModernV2 в ветке](../docs/images/v2-geometry.svg)
 
-## Что использовать
+Самодостаточный .NET 8 console project без внешнего геометрического пакета. Он нужен как читаемая реализация BSP-булевых операций и не заявляется как промышленное CAD-ядро.
 
-### `Production/` — основной V2
+## Запуск
 
-Это текущая рабочая реализация для будущего единого DCad: double precision, indexed mesh, topology validation, Manifold CSG, язык моделирования, CLI, OpenTK viewer и regression tests.
+Из корня ветки:
 
-Запуск:
-
-```powershell
-cd ModernV2/Production
-dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release
-dotnet run --project src/DCad.App/DCad.App.csproj -- examples/bracket.dcad
+```bash
+dotnet build ModernV2/DCad.MeshKernel.csproj -c Release
+dotnet run --project ModernV2/DCad.MeshKernel.csproj -c Release -- --self-test
+dotnet run --project ModernV2/DCad.MeshKernel.csproj -c Release -- output.stl --obj
 ```
 
-### Файлы `ModernV2/*.cs` — managed BSP reference
+Без пути программа пишет `v2-modern-demo.stl`. `--ascii` выбирает ASCII STL, `--obj` дополнительно создаёт OBJ.
 
-Небольшой полностью управляемый BSP-CSG оставлен как исследовательская реализация. Его удобно читать, профилировать и сравнивать с production backend, но он не является источником истины для сложных CAD boolean cases.
+## Файлы
 
-### `../GL/` — legacy V2
+| Файл | Содержимое |
+|---|---|
+| `MeshKernel.cs` | BSP types, box/cylinder, CSG, анализ, ASCII STL |
+| `MeshUtilities.cs` | validation, transforms, sphere, picking, binary STL, OBJ |
+| `Program.cs` | встроенная demo-модель и CLI |
+| `SelfTests.cs` | проверки cube, transforms, sphere, picking, subtraction и STL layout |
 
-Старая WinForms/SharpGL реализация сохранена для истории. Именно в ней были обнаружены математические проблемы: slope/intercept intersection, fixed epsilon thresholds, принудительное округление intersection points, случайный ray casting, некорректная triangulation для некоторых наборов точек и отсутствие строгой topology validation.
+## Честные границы
 
-## Роль V2 в общем DCad
+- fixed epsilon `1e-7` не зависит от масштаба;
+- splitter не содержит exact/adaptive predicates;
+- topology определяется квантованием координат;
+- BSP может создавать длинные и плохо обусловленные polygons;
+- нет BVH, coplanar cleanup, remeshing и тестов на большой набор STL;
+- результат следует валидировать перед использованием вне эксперимента.
 
-V2 отвечает за explicit surface / polygon representation. В объединённом приложении этот слой должен работать рядом с voxel/SDF и FEM:
-
-```text
-CAD language / operation graph
-            |
-            v
-     geometry kernel API
-       /      |       \
- polygon   voxel/SDF   B-Rep
-    |          |         |
-    +----------+---------+
-               |
-       renderer / FEM / IO
-```
-
-Production V2 уже использует тот же интерфейс и архитектурную модель, что и интеграционная ветка `Unified-CAD`, поэтому перенос в общее приложение не требует повторного переписывания геометрической математики.
+Каталог `Production/` исключён из compilation glob этого проекта и собирается отдельным solution.
