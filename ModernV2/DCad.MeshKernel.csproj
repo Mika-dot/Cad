@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Production is an independent multi-project solution.  Exclude it from the small managed
+         BSP/reference executable instead of letting SDK default globs compile two applications,
+         their tests and external-package adapters into one assembly. -->
+    <Compile Remove="Production/**/*.cs" />
+  </ItemGroup>
 </Project>
