@@ -9,7 +9,7 @@ if(args.Any(a=>string.Equals(a,"--self-test",StringComparison.OrdinalIgnoreCase)
 if(args.Length==0 || args.Any(a=>a=="--help"||a=="-h"))
 {
     Console.WriteLine("DCad.StlToolkit");
-    Console.WriteLine("  dcad-stl <input.stl> [--audit] [--repair output.stl] [--obj output.obj] [--ascii output.stl] [--scale N]");
+    Console.WriteLine("  dcad-stl <input.stl> [--repair output.stl] [--obj output.obj] [--ascii output.stl] [--scale N] [--weld T]");
     Console.WriteLine("  dcad-stl --self-test");
     return;
 }
@@ -17,18 +17,18 @@ if(args.Length==0 || args.Any(a=>a=="--help"||a=="-h"))
 string input=args[0];
 var mesh=StlReader.Read(input);
 double scale=ReadDouble(args,"--scale",1.0);
+double weld=ReadDouble(args,"--weld",1e-7);
 if(Math.Abs(scale-1.0)>1e-15) mesh=mesh.Transform(scale,default);
 
-var audit=StlAudit.Analyze(mesh);
-PrintAudit(audit);
+PrintAudit(StlAudit.Analyze(mesh),StlAdvanced.AnalyzeTopology(mesh,weld));
 
 string? repair=Value(args,"--repair");
 if(repair!=null)
 {
-    var cleaned=mesh.RemoveDegenerate();
+    var cleaned=StlAdvanced.RepairBasic(mesh,weld);
     StlWriter.WriteBinary(repair,cleaned,"DCad repaired STL");
     Console.WriteLine("repaired="+Path.GetFullPath(repair));
-    PrintAudit(StlAudit.Analyze(cleaned));
+    PrintAudit(StlAudit.Analyze(cleaned),StlAdvanced.AnalyzeTopology(cleaned,weld));
 }
 
 string? obj=Value(args,"--obj");
@@ -45,12 +45,16 @@ static double ReadDouble(string[] args,string key,double fallback)
 {
     var value=Value(args,key);return value==null?fallback:double.Parse(value,System.Globalization.CultureInfo.InvariantCulture);
 }
-static void PrintAudit(MeshAudit a)
+static void PrintAudit(MeshAudit a,TopologyAudit t)
 {
     Console.WriteLine($"triangles={a.Triangles}");
+    Console.WriteLine($"uniqueVertices={t.UniqueVertices}");
+    Console.WriteLine($"components={t.ConnectedComponents}");
+    Console.WriteLine($"isolatedComponents={t.IsolatedTriangles}");
     Console.WriteLine($"degenerate={a.DegenerateTriangles}");
     Console.WriteLine($"boundaryEdges={a.BoundaryEdges}");
     Console.WriteLine($"nonManifoldEdges={a.NonManifoldEdges}");
+    Console.WriteLine($"inconsistentDirectedEdges={t.InconsistentDirectedEdges}");
     Console.WriteLine($"duplicateTriangles={a.DuplicateTriangles}");
     Console.WriteLine($"surfaceArea={a.SurfaceArea:G12}");
     Console.WriteLine($"absoluteVolume={a.AbsoluteVolume:G12}");
