@@ -1,0 +1,32 @@
+name: Unified CAD CI
+
+on:
+  push:
+    branches: [Unified-CAD]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'Directory.Build.props'
+      - 'DCad.sln'
+
+jobs:
+  build-test-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore DCad.sln
+      - name: Build
+        run: dotnet build DCad.sln -c Release --no-restore
+      - name: Unit tests
+        run: dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release --no-build
+      - name: Language to robust mesh smoke test
+        run: |
+          dotnet run --project src/DCad.Cli/DCad.Cli.csproj -c Release --no-build -- examples/bracket.dcad bracket.obj
+          if (!(Test-Path bracket.obj)) { throw "OBJ was not generated" }
+          if ((Get-Item bracket.obj).Length -lt 100) { throw "OBJ is unexpectedly small" }

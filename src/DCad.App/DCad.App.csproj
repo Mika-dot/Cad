@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DCad.Core\DCad.Core.csproj" />
+    <ProjectReference Include="..\DCad.Boolean.Manifold\DCad.Boolean.Manifold.csproj" />
+    <ProjectReference Include="..\DCad.Language\DCad.Language.csproj" />
+    <PackageReference Include="OpenTK" Version="4.9.4" />
+  </ItemGroup>
+</Project>
