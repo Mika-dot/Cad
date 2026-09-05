@@ -1,87 +1,68 @@
-# DCad — Function Basket / Geometry Lab
+# Function-Basket / Geometry Lab
 
-Изначально эта ветка была корзиной отдельных экспериментов: математика, пересечение двух треугольников, проверка точки внутри тела. Исходники сохранены как historical prototypes, но основная роль ветки теперь — **общая геометрическая математика + регрессионная лаборатория DCad**.
+[![Geometry Regression Lab](https://github.com/Mika-dot/Cad/actions/workflows/function-basket-geometry-lab.yml/badge.svg?branch=Function-Basket)](https://github.com/Mika-dot/Cad/actions/workflows/function-basket-geometry-lab.yml)
 
-## ModernGeometryLab
+Ветка содержит старые консольные опыты по вычислительной геометрии и новый набор библиотек/тестов в `ModernGeometryLab`.
 
-`ModernGeometryLab/` содержит .NET 8 geometry core и test suite. Ветка нужна для того, чтобы алгоритмы V2, STL, renderer picking и будущего Unified CAD не копировали собственные версии `epsilon`, ray-triangle и point-in-solid.
+![Структура Geometry Regression Lab](docs/images/geometry-lab.svg)
 
-Уже есть:
+## Что использовать
 
-- `GeometryTolerance`: absolute + relative scale-aware tolerance;
-- `Vector2d`, `Vector3d`, `Aabb3d`, `Triangle3d`;
-- indexed `Mesh3d`;
-- polygon validation/triangulation;
-- repeatable point-in-solid через solid angle вместо случайного ray;
-- mesh validation;
-- Manifold Boolean backend regression tests;
-- invariants для Boolean volume identities и topology.
+`ModernGeometryLab/` — актуальная часть ветки:
 
-## Новое: SpatialQueries
+- `DCad.Core`: векторы, допуски, AABB, треугольники, triangulation и spatial queries;
+- `DCad.Boolean.Manifold`: адаптер ManifoldNET;
+- `GeometryLab.Tests`: xUnit-регрессии.
 
-Добавлены reusable spatial primitives:
+Каталоги `Математика`, `точка внутри` и `пересечения двух теугольников` сохранены без модернизации. Это отдельные программы .NET 6 с ранними вариантами алгоритмов; на них не следует ссылаться как на общее ядро DCad.
 
-- `Ray3d` / `RayHit`;
-- deterministic Möller–Trumbore ray-triangle query;
-- slab ray-AABB intersection;
-- closest point on triangle по Voronoi regions;
-- 3D Morton code для sparse chunks/BVH ordering.
+## Реализованные проверки
 
-Это напрямую используется/пригодится в:
+- triangulation простого вогнутого контура с сохранением площади;
+- отказ на self-intersection и нулевой длине ребра;
+- детерминированная классификация точки относительно замкнутой mesh;
+- тождества объёмов для union, intersection и difference;
+- topology результата булевых операций;
+- ray/triangle и ray/AABB;
+- ближайшая точка на треугольнике;
+- Morton-код для локального 3D-блока;
+- `orient2d`, `orient3d` и пересечение отрезков.
 
-```text
-OpenGL picking --------+
-                       |
-V2 BVH / intersections +--> DCad.Core.SpatialQueries
-                       |
-STL self-intersection -+
-                       |
-Voxel brick ordering --+
-```
+`RobustPredicates` использует быстрый `double` determinant и `decimal` fallback около потери значимости. Это практическая защита для обычных инженерных координат, но не exact arithmetic и не полная реализация adaptive predicates Шевчука.
 
-## Regression-first правило
+## Запуск
 
-Новый геометрический баг должен сначала превращаться в тест здесь, а потом исправляться в kernel.
-
-Например, старый `V2-Experiment` имел point-inside с `new Random()`. В Geometry Lab уже есть test, который 100 раз проверяет одинаковую классификацию одной и той же точки. Такой test не позволяет случайно вернуть старую недетерминированную ошибку.
-
-## Тесты
+Требуется .NET 8 SDK.
 
 ```powershell
 dotnet test ModernGeometryLab/tests/GeometryLab.Tests/GeometryLab.Tests.csproj -c Release
 ```
 
-Новые spatial regression tests проверяют:
+Тесты запускаются в GitHub Actions на Windows. Benchmark и fuzz/property-based тестов пока нет.
 
-- barycentric hit ray→triangle;
-- parallel ray rejection для AABB;
-- closest-point regions;
-- уникальность Morton code на локальном 8³ block.
-
-## Что развивать дальше
-
-1. SAH BVH builder и traversal;
-2. triangle-triangle intersection с coplanar case;
-3. segment/triangle and segment/segment distance;
-4. signed distance mesh query;
-5. winding-number acceleration через BVH;
-6. exact/adaptive orientation predicates;
-7. robust 2D segment intersections;
-8. plane/line/circle/arc primitives;
-9. transform/quaternion/matrix shared math;
-10. property-based/fuzz tests;
-11. adversarial near-coplanar regression corpus;
-12. benchmark suite для predicates/BVH/booleans.
-
-## Роль в едином DCad
-
-В конечной структуре это должен быть пакет `DCad.Geometry.Core`, который не зависит ни от UI, ни от SharpGL, ни от FEM, ни от STL parser:
+## Структура
 
 ```text
-DCad.Geometry.Core
-    ^       ^       ^       ^
-    |       |       |       |
-   V2      STL   Renderer  Volume
+ModernGeometryLab/
+├── Directory.Build.props
+├── src/
+│   ├── DCad.Core/
+│   └── DCad.Boolean.Manifold/
+└── tests/
+    └── GeometryLab.Tests/
 ```
 
-Так Function-Basket перестаёт быть свалкой функций и становится местом, где математическая корректность проекта закрепляется тестами.
+Подробно об актуальном наборе тестов: [`ModernGeometryLab/README.md`](ModernGeometryLab/README.md).
+
+## Ограничения
+
+- нет BVH, поэтому многие запросы обходят треугольники линейно;
+- нет triangle/triangle с полным coplanar case;
+- `Mesh3d` не half-edge и не хранит явную adjacency;
+- decimal fallback имеет ограниченный диапазон и не гарантирует точный знак для всех входов;
+- ManifoldNET остаётся внешней alpha-зависимостью;
+- код `DCad.Core` продублирован с `V2-Experiment` и `Unified-CAD`.
+
+## Дальнейшая роль
+
+Новые найденные геометрические ошибки следует сначала оформлять как минимальный тест здесь, а исправление переносить в единственный `DCad.Core` ветки `Unified-CAD`. После переноса эта ветка может остаться коллекцией воспроизводимых regression cases, а не четвёртой копией ядра.

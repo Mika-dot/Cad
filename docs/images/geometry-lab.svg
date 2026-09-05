@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="380" viewBox="0 0 1100 380" role="img" aria-labelledby="title desc">
+  <title id="title">Структура Geometry Regression Lab</title><desc id="desc">Исторические случаи превращаются в тесты общих геометрических функций.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="#a78bfa"/></marker></defs>
+  <rect width="1100" height="380" rx="24" fill="#151027"/>
+  <text x="55" y="58" fill="#faf5ff" font-family="Segoe UI,Arial" font-size="30" font-weight="700">Function-Basket → воспроизводимые геометрические проверки</text>
+  <g fill="#2e2451" stroke="#a78bfa" stroke-width="2"><rect x="55" y="120" width="220" height="120" rx="14"/><rect x="330" y="120" width="220" height="120" rx="14"/><rect x="605" y="120" width="220" height="120" rx="14"/><rect x="880" y="120" width="165" height="120" rx="14"/></g>
+  <g fill="#ede9fe" font-family="Segoe UI,Arial" text-anchor="middle"><text x="165" y="157" font-size="20" font-weight="700">Старые примеры</text><text x="165" y="188" font-size="14">треугольники</text><text x="165" y="211" font-size="14">точка в теле</text><text x="440" y="157" font-size="20" font-weight="700">DCad.Core</text><text x="440" y="188" font-size="14">predicates · queries</text><text x="440" y="211" font-size="14">triangulation</text><text x="715" y="157" font-size="20" font-weight="700">Инварианты</text><text x="715" y="188" font-size="14">объём · topology</text><text x="715" y="211" font-size="14">детерминизм</text><text x="962" y="170" font-size="20" font-weight="700">xUnit</text><text x="962" y="202" font-size="14">Windows CI</text></g>
+  <g stroke="#a78bfa" stroke-width="3" marker-end="url(#a)"><line x1="275" y1="180" x2="320" y2="180"/><line x1="550" y1="180" x2="595" y2="180"/><line x1="825" y1="180" x2="870" y2="180"/></g>
+  <text x="55" y="305" fill="#c4b5fd" font-family="Segoe UI,Arial" font-size="16">Современный код находится в ModernGeometryLab. Три русскоязычных консольных проекта сохранены как исходный материал.</text>
+</svg>
