@@ -24,7 +24,7 @@ public sealed class DocumentGraphTests
         var cut = FeatureNode.Create("result", FeatureKind.Boolean, "difference", [box.Id, hole.Id]);
         graph.Add(cut);
 
-        var order = graph.TopologicalOrder();
+        var order = graph.TopologicalOrder().ToList();
         Assert.Equal(3, order.Count);
         Assert.True(order.IndexOf(box) < order.IndexOf(cut));
         Assert.True(order.IndexOf(hole) < order.IndexOf(cut));
