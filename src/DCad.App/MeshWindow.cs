@@ -1,6 +1,7 @@
 using DCad.Core;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
+using DVector3d = DCad.Core.Vector3d;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
@@ -21,7 +22,7 @@ public sealed class MeshWindow : GameWindow
         foreach (var ti in mesh.Triangles)
         {
             var a = mesh.Vertices[ti.A]; var b = mesh.Vertices[ti.B]; var c = mesh.Vertices[ti.C];
-            var n = Vector3d.Cross(b - a, c - a).Normalized();
+            var n = DVector3d.Cross(b - a, c - a).Normalized();
             Add(a, n); Add(b, n); Add(c, n);
         }
         _vertices = list.ToArray();
@@ -29,7 +30,7 @@ public sealed class MeshWindow : GameWindow
         _center = new((float)((bounds.Min.X + bounds.Max.X) * .5), (float)((bounds.Min.Y + bounds.Max.Y) * .5), (float)((bounds.Min.Z + bounds.Max.Z) * .5));
         _distance = (float)Math.Max(10, bounds.Diagonal * 1.8);
 
-        void Add(Vector3d p, Vector3d n)
+        void Add(DVector3d p, DVector3d n)
         {
             list.Add((float)p.X); list.Add((float)p.Y); list.Add((float)p.Z);
             list.Add((float)n.X); list.Add((float)n.Y); list.Add((float)n.Z);
@@ -42,7 +43,7 @@ public sealed class MeshWindow : GameWindow
         GL.ClearColor(0.055f, 0.065f, 0.08f, 1f);
         GL.Enable(EnableCap.DepthTest);
         GL.Enable(EnableCap.CullFace);
-        GL.CullFace(CullFaceMode.Back);
+        GL.CullFace(TriangleFace.Back);
 
         _program = CreateProgram(VertexShader, FragmentShader);
         _mvpLocation = GL.GetUniformLocation(_program, "uMvp");
@@ -76,7 +77,7 @@ public sealed class MeshWindow : GameWindow
     {
         base.OnRenderFrame(args);
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-        GL.PolygonMode(MaterialFace.FrontAndBack, _wireframe ? PolygonMode.Line : PolygonMode.Fill);
+        GL.PolygonMode(TriangleFace.FrontAndBack, _wireframe ? PolygonMode.Line : PolygonMode.Fill);
 
         var yr = MathHelper.DegreesToRadians(_yaw);
         var pr = MathHelper.DegreesToRadians(_pitch);
