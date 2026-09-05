@@ -1,0 +1,19 @@
+name: V1 Experiment CI
+
+on:
+  push:
+    branches: [ "V1-Experiment" ]
+  pull_request:
+    branches: [ "V1-Experiment" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NuGet/setup-nuget@v2
+      - uses: microsoft/setup-msbuild@v2
+      - name: Restore
+        run: nuget restore "Cadv1.e\OpenGL_lesson_CSharp.sln"
+      - name: Build
+        run: msbuild "Cadv1.e\OpenGL_lesson_CSharp.sln" /m /p:Configuration=Release /p:Platform=x86
