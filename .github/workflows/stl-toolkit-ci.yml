@@ -1,0 +1,20 @@
+name: STL Toolkit CI
+
+on:
+  push:
+    branches: [ "Rendering-stl" ]
+  pull_request:
+    branches: [ "Rendering-stl" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        run: dotnet build ModernStl/DCad.StlToolkit.csproj -c Release
+      - name: STL round-trip and topology self test
+        run: dotnet run --project ModernStl/DCad.StlToolkit.csproj -c Release -- --self-test
