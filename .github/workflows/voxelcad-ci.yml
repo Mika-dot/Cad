@@ -1,0 +1,31 @@
+name: VoxelCAD CI
+
+on:
+  push:
+    branches: [ "VoxelСad" ]
+  pull_request:
+    branches: [ "VoxelСad" ]
+
+jobs:
+  build-and-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NuGet/setup-nuget@v2
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore OpenGL_lesson_CSharp.sln
+
+      - name: Build Release x86
+        run: msbuild OpenGL_lesson_CSharp.sln /m /p:Configuration=Release /p:Platform=x86 /p:RestorePackages=false
+
+      - name: Smoke test JSON to greedy STL
+        shell: pwsh
+        run: |
+          $exe = ".\OpenGL_lesson_CSharp\bin\Release\OpenGL_lesson_CSharp.exe"
+          & $exe --scene ".\examples\modern_voxel_scene.json" --out ".\smoke.stl"
+          if ($LASTEXITCODE -ne 0) { throw "VoxelCAD CLI exited with code $LASTEXITCODE" }
+          if (!(Test-Path ".\smoke.stl")) { throw "smoke.stl was not generated" }
+          if ((Get-Item ".\smoke.stl").Length -le 84) { throw "smoke.stl is empty or invalid" }
+          Write-Host "smoke.stl bytes:" (Get-Item ".\smoke.stl").Length
