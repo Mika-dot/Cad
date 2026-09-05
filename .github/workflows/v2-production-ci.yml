@@ -1,0 +1,40 @@
+name: V2 Production Polygon CAD CI
+
+on:
+  push:
+    branches: [ "V2-Experiment" ]
+    paths:
+      - 'ModernV2/Production/**'
+      - '.github/workflows/v2-production-ci.yml'
+  pull_request:
+    paths:
+      - 'ModernV2/Production/**'
+
+jobs:
+  build-test-smoke:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ModernV2/Production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        working-directory: repo/ModernV2/Production
+        run: dotnet restore DCad.sln
+      - name: Build
+        working-directory: repo/ModernV2/Production
+        run: dotnet build DCad.sln -c Release --no-restore
+      - name: Regression tests
+        working-directory: repo/ModernV2/Production
+        run: dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release --no-build
+      - name: CAD language -> validated OBJ
+        working-directory: repo/ModernV2/Production
+        run: |
+          dotnet run --project src/DCad.Cli/DCad.Cli.csproj -c Release --no-build -- examples/bracket.dcad result.obj
+          if (!(Test-Path result.obj)) { throw "OBJ was not generated" }
+          if ((Get-Item result.obj).Length -lt 100) { throw "OBJ is unexpectedly small" }

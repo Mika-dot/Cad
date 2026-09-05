@@ -1,0 +1,12 @@
+# Units are millimetres by default. Rotations are degrees.
+param width = 60mm;
+param depth = 40mm;
+param height = 8mm;
+
+let base = box(width, depth, height);
+let hole = cylinder(20mm, 5mm);
+let h1 = translate(hole, -20mm, -10mm, 0mm);
+let h2 = translate(hole,  20mm, -10mm, 0mm);
+let h3 = translate(hole, -20mm,  10mm, 0mm);
+let h4 = translate(hole,  20mm,  10mm, 0mm);
+solid result = base - h1 - h2 - h3 - h4;
