@@ -1,83 +1,154 @@
-# DCad
- Сделан двумя студентами:
-* [Пересторонин Аким](https://github.com/Mika-dot)
-* [Трушин Владислав](https://github.com/TrushinVlad)
+# DCad — V1 Experiment / sparse voxel CAD baseline
 
-##  Добавление произвольной фигуры.
+`V1-Experiment` — первая линия DCad: CAD как дискретный объём. Исторический прототип строил тело через три параллельных массива `worldX/worldY/worldZ`, экструзию 2D-контура, булево вычитание, температурное поле и генерацию G-code.
 
-Для добавления произвольной фигуры необходимо вызвать функцию генерации этой фигуры.
+В обновлении 2026 ветка сохранена как отдельный эксперимент, но идея доведена до более пригодной архитектуры. Старый интерфейс и алгоритмы не удалены: их можно запустить с `--legacy` и напрямую сравнить с новым ядром.
 
-```C#
-            AdditionWorld(
-                new int[] { 0, 5, 5, 0 }, // контур по Х
-                new int[] { 0, 0, 5, 5 }, // контур по У
-                10, // экструзия
-                new int[] { 0, 0, 0 }, // Кручение вокселей
-                new int[] { 2, 2, 2 }, // Перемещение
-                0, // тип экструзии
+## Что изменено
 
-                ref worldX, ref worldY, ref worldZ
-            );
+### Sparse voxel storage
+
+Вместо обязательного использования трёх синхронных массивов добавлен `Modern/SparseVoxelGrid`:
+
+```csharp
+var grid = new SparseVoxelGrid();
+grid.AddBox(0, 0, 0, 20, 15, 8);
+grid.SubtractSphere(10, 7.5, 5, 4);
+grid.AddCylinderZ(10, 7.5, 0, 14, 2, material: 2);
 ```
 
-Первый массив содержит точки по часовой стрелки оси X.
-Второй массив содержит точки соответствующие массиву X, однако по кординатной прямой Y.
+Пустое пространство не хранится. Ключом является одна координата `VoxelKey`, а значение `VoxelCell` содержит `Material` и произвольное scalar field. Это устраняет главный класс ошибок старой схемы — рассинхронизацию `worldX`, `worldY`, `worldZ`, `worldID`.
 
-Далее параметр экструзия и он выдавливает воксели по контуру определенного до этого.
+### CSG и примитивы
 
-Следующий массив это массив углов поворота по трем осям фигуры относительно нулевых координат контура.
-Этот пораметр предназначен для вращения воксельного тела.
+Реализованы:
 
-Массив перемещения служит для перемещения тела фигуры в пространстве и задается так же тремя координатоми соответствующих осям.
+- `UnionWith`, `Subtract`, `IntersectWith`;
+- box add/subtract;
+- sphere add/subtract;
+- Z-cylinder;
+- polygon extrusion add/subtract;
+- translate;
+- arbitrary scalar field.
 
-Тип экструзии обозначает материал фигуры.
-В данный момент всего 2 типа.
-1. Значения 1 это существования вокселя.
-2. Значение 0 это отсутствия вокселя.
-Если поставить фигуру 0 и она войдет в фигуру со значением 1, то произойдет онулирования положительной фигуры и тем смым процес буленовского вычитания. (Твердотельное моделирование)
+2D polygon extrusion проверяет принадлежность центра voxel-cell, а не целочисленной точки на границе, поэтому поведение стабильнее на контуре.
 
-![Пример генерации фигуры](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/1.PNG)
+### Поля внутри CAD-модели
 
-##  Gcode.
+Voxel теперь может быть не только `есть/нет`:
 
-```C#
-Gcode("test", ref worldX, ref worldY, ref worldZ); 
+```csharp
+grid.SetScalar((x, y, z) =>
+    (float)(z + 2.0 * Math.Sin(x * 0.4)));
 ```
 
-Передаете параметр названия сохраняемого файла.
+На одном backend можно хранить температуру, плотность topology optimization, напряжение, material id и в дальнейшем другие расчётные поля. Это важная точка объединения с веткой `FEM_Voxel`.
 
-![Пример генерации gcode](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/3.PNG)
-![Пример генерации gcode напечатоного](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/4.JPG)
+### Surface-only rendering
 
+Старый viewer рисовал куб для каждого voxel и отправлял в OpenGL все шесть граней, включая полностью внутренние. Новое ядро отдаёт только `SurfaceFaces()`: если два voxels соседние, общая грань вообще не попадает в renderer.
 
-## Температура
+Это уменьшает число реально рисуемых полигонов без изменения геометрии.
 
-```C#
-            temp = TemperatureVoxel(ref worldID, worldX, worldY, worldZ, 
-                new int[,] {
-                    { 0, 0, 0, -10 },
-                    { 10, 10, 10, 10 }
-                });
+### Новый viewer
+
+По умолчанию приложение запускает `ModernVoxelDemoForm`:
+
+- orbit camera мышью;
+- wheel zoom;
+- perspective camera;
+- depth test и back-face culling;
+- координатные оси и reference grid;
+- material coloring;
+- scalar/temperature heatmap;
+- optional wire overlay;
+- статистика `voxels / exposed faces`;
+- интерактивное добавление и вычитание primitives.
+
+Историческое окно:
+
+```powershell
+OpenGL_lesson_CSharp.exe --legacy
 ```
 
-Температуру можно задать с помощью функции "TemperatureVoxel". TemperatureVoxel принимает на вход следующие аргументы:
-* worldID, worldX, worldY, worldZ - это ссылки на массивы, которые и представляют мир.
-* Последним идёт двумерный массив. В нём перечислено, в какую точку какая температура идёт. Первые три целых числа - это координаты в пространстве (необязательно, чтобы в этих координатах был объект), четвёртое число - это сама температура.
-На выход выдаётся дробное число. Это технический параметр для отладки.
+### G-code baseline
 
-![Пример температуры](https://github.com/Mika-dot/Cad/blob/V1-Experiment/media/2.PNG)
+`VoxelGCodePlanner` выдаёт layer-wise serpentine path вместо произвольного прохода по массивам. Это исследовательский baseline, не замена полноценному slicer, но travel-path теперь детерминирован и локален по слоям.
 
-# Компиляция
+## API
 
-Программа компилируется под Windows. Язык программирования C#. Файл .sln - основной файл проекта. Проект можно загрузить в Visual Studio (или любой другой редактор). Загружать дополнительные библиотеки не требуется, они идут вместе с проектом. Проект можно сразу же собрать и начать отлаживать.
-Программа основана на Windows Forms и производит рендер объектов с помощью OpenGL. Визуализатор OpenGL (стороннее ПО) был получен и загружен с помощью NuGet.
-Программа имеет примитивный интерфейс и состоит из одной формы - на ней расположено само окно для отображения модели, а также кнопки создания, сохранения и загрузки.
+```text
+Modern/
+├── VoxelEngine.cs
+│   ├── VoxelKey
+│   ├── VoxelCell
+│   ├── SparseVoxelGrid
+│   ├── VoxelFace
+│   └── VoxelGCodePlanner
+└── ModernVoxelDemoForm.cs
+```
 
-## Сохранение
-Вся информация сохраняется в файл save.txt, расположенный в корневой директории программы.
-На форме есть кнопки сохранения мира, температуры и G-Code. Последовательно нажимая их, можно сгенерировать файл save.txt, содержащий всю необходимую информацию для её последующей загрузки. Программа сохраняет не все воксели, а информацию о выдавливании и вырезании.
+Пример polygon extrusion:
 
-## Загрузка
-При нажатии на кнопку "Воспроизвести" программа загружает информацию из save.txt и восстанавливает форму объекта и его температуру.
+```csharp
+var x = new double[] { 0, 20, 20, 4, 4, 0 };
+var y = new double[] { 0, 0, 6, 6, 18, 18 };
 
-P.S. Это эксперимент по создания воксельного САПР.
+grid.ExtrudePolygon(x, y, 0, 8, material: 1);
+grid.ExtrudePolygon(
+    new double[] { 7, 13, 13, 7 },
+    new double[] { 2, 2, 5, 5 },
+    0, 8,
+    subtract: true);
+```
+
+## Зачем сохранять V1 отдельно
+
+Эта ветка полезна как простая reference implementation volume CAD. В ней удобно проверять алгоритм до переноса в более тяжёлое ядро:
+
+- voxel CSG;
+- morphology;
+- scalar/material fields;
+- manufacturing compensation;
+- scan-to-volume;
+- topology field post-processing;
+- G-code/slicing experiments.
+
+Она не должна оставаться финальным storage backend: `Dictionary/HashSet` удобен для правильности алгоритма, но следующий уровень — sparse bricks 8³/16³, затем narrow-band SDF/VDB.
+
+## Следующий этап V1
+
+1. `IVoxelGrid` и 8³ bit-brick backend.
+2. Morton ordering chunks.
+3. greedy meshing прямоугольных поверхностей.
+4. narrow-band SDF поверх sparse chunks.
+5. morphology 6/18/26 neighbourhood.
+6. import mesh → voxel/SDF.
+7. 3MF export с material ids.
+8. соединение scalar field с FEM/topology optimization.
+
+## Сборка
+
+Windows + .NET Framework 4.8:
+
+```powershell
+nuget restore Cadv1.e\OpenGL_lesson_CSharp.sln
+msbuild Cadv1.e\OpenGL_lesson_CSharp.sln /m /p:Configuration=Release /p:Platform=x86
+```
+
+## Место V1 в будущем общем приложении
+
+```text
+Unified DCad
+   │
+   ├─ Geometry.Core
+   │    ├─ Polygon/BRep adapter      <- V2
+   │    ├─ Sparse voxel/field        <- V1 + VoxelСad
+   │    └─ Mesh/STL                  <- Rendering-stl
+   │
+   ├─ Analysis                       <- FEM_Voxel
+   ├─ Rendering                      <- OpenGL
+   └─ Geometry.Math                  <- Function-Basket
+```
+
+V1 теперь рассматривается не как «старая версия CAD», а как компактная лаборатория sparse volumetric geometry.
