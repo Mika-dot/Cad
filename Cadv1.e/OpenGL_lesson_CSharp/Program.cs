@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Windows.Forms;
+using OpenGL_lesson_CSharp.Modern;
 
 namespace OpenGL_lesson_CSharp
 {
@@ -9,6 +10,12 @@ namespace OpenGL_lesson_CSharp
         [STAThread]
         static void Main(string[] args)
         {
+            if (args != null && args.Any(a => string.Equals(a, "--self-test", StringComparison.OrdinalIgnoreCase)))
+            {
+                VoxelDocumentSelfTest.Run();
+                return;
+            }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
