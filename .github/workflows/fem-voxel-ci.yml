@@ -32,3 +32,47 @@ jobs:
           assert np.isclose(field.sum(),10.0)
           print('field smoke ok')
           PY
+      - name: Advanced optimization smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from openscad_gen.advanced_optimization import (
+              ContinuationSchedule,
+              aggregate_element_energies,
+              ks_aggregate,
+              oc_update,
+              overhang_violation_mask,
+              robust_projection_triplet,
+          )
+
+          rho = np.linspace(0.05, 0.95, 16)
+          triplet = robust_projection_triplet(rho, beta=8.0, eta=0.5, delta=0.1)
+          assert np.all(triplet['eroded'][0] <= triplet['nominal'][0] + 1e-12)
+          assert np.all(triplet['nominal'][0] <= triplet['dilated'][0] + 1e-12)
+
+          agg = aggregate_element_energies([np.ones(8), np.full(8, 2.0)], [0.25, 0.75])
+          assert np.allclose(agg, 1.75)
+          assert 2.0 <= ks_aggregate([1.0, 2.0, 1.5], rho=50.0) < 2.1
+
+          updated = oc_update(
+              np.full(10, 0.5),
+              -np.linspace(1.0, 2.0, 10),
+              np.ones(10),
+              target_mass=5.0,
+              move_limit=0.1,
+          )
+          assert updated.shape == (10,)
+          assert np.all((updated >= 1e-3) & (updated <= 1.0))
+
+          solid = np.zeros((5,5,4), dtype=bool)
+          solid[2,2,0] = True
+          solid[2,2,1] = True
+          solid[4,4,2] = True
+          violations = overhang_violation_mask(solid, build_axis=2, support_radius=1)
+          assert violations[4,4,2]
+
+          s = ContinuationSchedule()
+          assert s.state(24).penal >= s.state(0).penal
+          assert s.state(24).beta >= s.state(0).beta
+          print('advanced optimization smoke ok')
+          PY
