@@ -1,4 +1,5 @@
 using DCad.Core;
+using Xunit;
 
 namespace GeometryLab.Tests;
 
