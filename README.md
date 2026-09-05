@@ -1,50 +1,52 @@
-# DCad — Unified CAD/CAE application
+# DCad — Unified-CAD
 
-`Unified-CAD` — интеграционная ветка репозитория. Здесь исторические направления DCad перестают быть отдельными демонстраторами и собираются в одну модульную систему.
+[![Unified CAD CI](https://github.com/Mika-dot/Cad/actions/workflows/unified-cad-ci.yml/badge.svg?branch=Unified-CAD)](https://github.com/Mika-dot/Cad/actions/workflows/unified-cad-ci.yml)
 
-Цель: один документ, один язык/operation graph, один viewport и несколько взаимозаменяемых geometry/analysis backends.
+`Unified-CAD` — интеграционная ветка репозитория. Здесь собран исполняемый маршрут от текстовой модели до проверенной треугольной сетки, OBJ и окна OpenGL.
 
-## Что уже работает
+![Фактическая архитектура Unified-CAD](docs/images/unified-cad.svg)
 
-На первом интеграционном этапе собран production polygon-CAD vertical slice:
+## Состояние
 
-```text
-.dcad source
-    ↓
-DCad.Language
-    ↓
-IModelingKernel
-    ↓
-Manifold polygon CSG
-    ↓
-indexed Mesh3d + topology validation
-    ├──→ DCad.Cli → OBJ
-    └──→ DCad.App → OpenTK viewport
-```
-
-Реализовано:
+Работает:
 
 - .NET 8 solution;
-- double-precision geometry primitives;
-- indexed triangle mesh;
-- bounds, surface area, signed volume;
-- topology audit: degenerate triangles, boundary edges, non-manifold edges, inconsistent winding;
-- deterministic simple-polygon triangulation с поддержкой concave polygons;
-- deterministic point-in-solid через generalized solid angle;
-- production mesh booleans через `ManifoldNET`;
+- параметры и операции в файлах `.dcad`;
+- `box`, `sphere`, `cylinder`;
+- `translate`, `rotate`, `scale`;
 - `union`, `difference`, `intersection`;
-- box / sphere / cylinder;
-- translate / rotate / scale;
-- собственный текстовый CAD language;
-- headless CLI;
-- modern OpenTK 4 shader renderer;
-- wireframe / orbit / zoom;
-- regression tests, выросшие из проблем старого `V2-Experiment`;
-- GitHub Actions build + tests + real language→mesh smoke test.
+- адаптер ManifoldNET для булевых операций над mesh;
+- явное описание representation/capabilities геометрического backend;
+- индексированная `Mesh3d` и проверка topology;
+- экспорт OBJ из CLI;
+- OpenTK 4 viewer;
+- xUnit-тесты геометрии, языка и истории документа;
+- чтение формата `final_fields.npz`, создаваемого веткой `FEM_Voxel`;
+- JSON-схема запроса и краткого результата расчёта.
 
-## Язык проектирования
+Пока не связано в одно приложение:
 
-Пример `examples/bracket.dcad`:
+- `.dcad` исполняется напрямую и не создаёт `DocumentGraph`;
+- undo/redo существует только как библиотечный класс;
+- `DCad.Fields` не подключён к CLI и viewer;
+- окно показывает одну итоговую сетку без дерева объектов, выбора граней и редактирования параметров;
+- сохранение проекта отсутствует.
+
+## Структура solution
+
+| Проект | Содержимое |
+|---|---|
+| `DCad.Core` | векторы, допуски, `Mesh3d`, triangulation, point-in-solid, `DocumentGraph` |
+| `DCad.Boolean.Manifold` | реализация `ICapabilityModelingKernel` поверх ManifoldNET |
+| `DCad.Language` | lexer/parser/evaluator языка `.dcad` |
+| `DCad.Cli` | выполнение файла и запись OBJ |
+| `DCad.App` | OpenTK/OpenGL 3.3 viewer |
+| `DCad.Fields` | structured grid, NPZ reader, analysis request/result |
+| `DCad.Tests` | xUnit-регрессии |
+
+## Язык `.dcad`
+
+Пример из [`examples/bracket.dcad`](examples/bracket.dcad):
 
 ```text
 param width = 60mm;
@@ -53,172 +55,82 @@ param height = 8mm;
 
 let base = box(width, depth, height);
 let hole = cylinder(20mm, 5mm);
-
 let h1 = translate(hole, -20mm, -10mm, 0mm);
 let h2 = translate(hole,  20mm, -10mm, 0mm);
-let h3 = translate(hole, -20mm,  10mm, 0mm);
-let h4 = translate(hole,  20mm,  10mm, 0mm);
 
-solid result = base - h1 - h2 - h3 - h4;
+solid result = base - h1 - h2;
 ```
 
 Поддерживаются:
 
-- `param` — числовые параметры;
-- `let` — промежуточные solids;
-- `solid` — результирующий solid;
-- `mm`, `cm`, `m`, `deg`;
-- `+` — union;
-- `-` — difference;
-- `&` — intersection;
-- `box`, `sphere`, `cylinder`;
-- `translate`, `rotate`, `scale`;
-- функции `union(...)`, `difference(...)`, `intersection(...)`.
+| Конструкция | Значение |
+|---|---|
+| `param name = expr;` | числовой параметр |
+| `let name = solid;` | промежуточное тело |
+| `solid result = solid;` | итоговое тело |
+| `mm`, `cm`, `m`, `deg` | единицы длины и угла |
+| `+`, `-`, `&` | union, difference, intersection |
 
-Это первый слой будущего языка. Следующий этап — сохраняемый AST/operation graph, constraints, sketches, arrays/patterns, named selections и связь команд с undo/redo.
+Это язык последовательного построения solid. Эскизов, ограничений, циклов, массивов, именованных граней и пользовательских функций в нём нет.
 
-## Проекты solution
-
-```text
-DCad.sln
-├── DCad.Core
-│   ├── math / tolerance policy
-│   ├── Mesh3d
-│   ├── mesh validation
-│   ├── polygon triangulation
-│   └── solid queries
-├── DCad.Boolean.Manifold
-│   └── production triangle-solid CSG adapter
-├── DCad.Language
-│   └── parser / evaluator for .dcad
-├── DCad.Cli
-│   └── headless modeling + mesh validation + OBJ
-├── DCad.App
-│   └── OpenTK / OpenGL 3.3+ viewport
-└── DCad.Tests
-    └── geometry / CSG / language regressions
-```
-
-`IModelingKernel` специально отделяет язык и UI от конкретной реализации booleans. В дальнейшем рядом могут появиться:
-
-```text
-IModelingKernel
-├── ManifoldMeshKernel        current
-├── VoxelSdfKernel            from VoxelСad
-└── OpenCascadeBRepKernel     future exact/B-Rep path
-```
-
-## Почему старый V2 не используется как production kernel
-
-В исходном `V2-Experiment` были хорошие идеи, но вычислительная геометрия строилась на наборе локальных эвристик:
-
-- slope/intercept пересечения отрезков;
-- точные сравнения floating-point с нулём;
-- фиксированные epsilon, не зависящие от масштаба модели;
-- принудительное округление intersection points;
-- ad-hoc triangulation наборов точек;
-- random ray casting для point-in-solid;
-- отсутствие обязательной проверки manifold topology после CSG.
-
-Такой код полезен как история разработки и regression corpus, но его нельзя делать базой объединённого CAD. В `V2-Experiment/ModernV2/Production` теперь лежит та же исправленная production architecture, а старый BSP оставлен как readable reference implementation.
-
-## Как сюда входят остальные ветки
-
-| Ветка | Что переносится | Целевой модуль |
-|---|---|---|
-| `V1-Experiment` | operation history, voxel extrusion, G-code, temperature-field concept | `DCad.Document`, `DCad.Manufacturing`, fields |
-| `V2-Experiment` | explicit polygon/mesh representation | `DCad.Geometry.Mesh` — уже начато |
-| `VoxelСad` | sparse voxels, implicit primitives, morphology, TPMS/lattice, voxel↔mesh | `DCad.Geometry.Voxel` |
-| `FEM_Voxel` | FEM, SIMP/OC, density/stress/displacement fields | `DCad.Analysis`, `DCad.Optimization` |
-| `OpenGL` | camera/viewport UX, render modes, field heatmap | `DCad.Viewport` |
-| `Rendering-stl` | STL validation/import/export and application workflow | `DCad.IO` |
-| `Function-Basket` | pathological geometry examples | `DCad.Tests` / fuzz/regression corpus |
-
-## Общая архитектура
-
-```text
-                         DCad.App
-                            │
-                   Document / Commands
-                            │
-                    .dcad / project file
-                            │
-                    Geometry Kernel API
-                 ┌──────────┼──────────┐
-                 │          │          │
-             Polygon      Voxel/SDF   B-Rep
-                 │          │          │
-                 └──────┬───┴────┬─────┘
-                        │        │
-                   Mesh/Field contracts
-                    ┌───┴───┐  ┌─┴──────────┐
-                    │       │  │            │
-                 Viewport   IO FEM/Optimization
-                                │
-                     stress/density/displacement
-                                │
-                         lattice / TPMS
-                                │
-                          manufacturing
-```
-
-Критический принцип: geometry, analysis и IO модули не владеют UI и не рисуют OpenGL сами. Renderer получает mesh/field packets; FEM получает geometry/field data; language создаёт operation graph через kernel interfaces.
-
-## Запуск
+## Сборка и проверка
 
 ```powershell
 dotnet restore DCad.sln
-dotnet build DCad.sln -c Release
-dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release
+dotnet build DCad.sln -c Release --no-restore
+dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release --no-build
 ```
 
 CLI:
 
 ```powershell
-dotnet run --project src/DCad.Cli/DCad.Cli.csproj -- examples/bracket.dcad result.obj
+dotnet run --project src/DCad.Cli/DCad.Cli.csproj -c Release -- examples/bracket.dcad result.obj
 ```
 
 Viewer:
 
 ```powershell
-dotnet run --project src/DCad.App/DCad.App.csproj -- examples/bracket.dcad
+dotnet run --project src/DCad.App/DCad.App.csproj -c Release -- examples/bracket.dcad
 ```
 
 Управление viewer:
 
-- стрелки — orbit;
-- `PageUp/PageDown` — zoom;
-- `F1` — solid/wireframe;
-- `Esc` — exit.
+| Клавиша | Действие |
+|---|---|
+| стрелки | вращение |
+| `PageUp` / `PageDown` | масштаб |
+| `F1` | solid / wireframe |
+| `Esc` | выход |
 
-## Инварианты geometry kernel
+## Проверяемые инварианты
 
-Для solid-операций вводится контракт, которого не было в старых экспериментах:
+Тесты проверяют:
 
-1. floating-point tolerance задаётся централизованно;
-2. входной indexed mesh можно проверить до операции;
-3. финальный solid обязан иметь согласованный winding;
-4. у замкнутого solid не должно быть boundary edges;
-5. non-manifold edges не принимаются молча;
-6. triangulation простого polygon даёт `n-2` triangles;
-7. point-in-solid не зависит от RNG;
-8. найденный geometry bug превращается в regression test в `Function-Basket/ModernGeometryLab`.
+- `n - 2` треугольника после triangulation простого многоугольника;
+- отказ на самопересекающемся контуре;
+- ожидаемые объёмы для union/intersection/difference двух коробок;
+- отсутствие boundary и non-manifold edges у результатов этих операций;
+- воспроизводимую классификацию точки через solid angle;
+- выполнение `.dcad` с единицами;
+- топологический порядок `DocumentGraph`;
+- undo/redo и каскадное удаление зависимых узлов.
 
-## Следующие интеграционные этапы
+Это небольшой набор регрессий, а не доказательство устойчивости на произвольной CAD-геометрии.
 
-1. `DCad.Document`: persistent operation graph, object IDs, parameters, undo/redo.
-2. `DCad.IO`: единый STL/OBJ/PLY/3MF layer и mesh repair report.
-3. `DCad.Viewport`: перенести лучшие camera/selection/render-mode функции из `OpenGL` и объединить с OpenTK backend.
-4. `DCad.Geometry.Voxel`: подключить `VoxelСad` через общий geometry/field contract.
-5. mesh ↔ voxel/SDF conversion.
-6. `DCad.Analysis.Protocol`: связать C# document с `FEM_Voxel` без OpenSCAD/Streamlit state.
-7. stress/density/displacement overlays в одном viewport.
-8. FEM/topology result → variable lattice/TPMS geometry.
-9. sketches + constraints + extrusion/revolve/sweep.
-10. B-Rep/STEP bridge для точной инженерной геометрии, где triangle/voxel representation недостаточно.
+## Зависимости и ограничения
 
-## Текущий статус
+- ManifoldNET `1.0.7-alpha` — внешняя alpha-зависимость и текущая реализация mesh CSG.
+- Ветка проверяется GitHub Actions на Windows; GUI-теста и снимка кадра в CI нет.
+- `Mesh3d` — треугольная сетка, не B-Rep. STEP, NURBS и точные сопряжения не поддерживаются.
+- Point-in-solid выполняет полный обход треугольников; BVH отсутствует.
+- NPZ reader поддерживает только ожидаемое подмножество NPY dtype/order.
+- У репозитория нет общей лицензии.
 
-Первый vertical slice уже проходит CI целиком: restore → Release build → geometry/CSG/language regression tests → выполнение `.dcad` → CSG → topology validation → OBJ. Это базовая точка, от которой имеет смысл дальше присоединять остальные ветки, а не ещё раз переписывать их UI независимо друг от друга.
+## Ближайшая работа
 
-> `ManifoldNET` сейчас используется как практический mesh-CSG backend и остаётся заменяемым adapter-слоем. Для долгосрочного промышленного CAD отдельно потребуется B-Rep/STEP backend; mesh booleans не должны притворяться заменой точной NURBS/B-Rep геометрии.
+1. Связать AST `.dcad` с `DocumentGraph`, чтобы параметры и зависимости сохранялись.
+2. Добавить формат проекта и миграции его версии.
+3. Подключить `DcadFieldArchive` к viewer и вывести density/stress.
+4. Перенести STL I/O из `Rendering-stl` без дублирования `Mesh3d`.
+5. Добавить выбор объектов/граней, дерево документа и редактирование параметров.
+6. Ввести BVH для picking и spatial queries.
