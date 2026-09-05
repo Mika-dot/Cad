@@ -1,254 +1,458 @@
 # DCad — experimental CAD / CAE platform
 
-DCad — исследовательский репозиторий, в котором за несколько поколений появилось несколько независимых подходов к CAD: voxel solid modeling, polygon/triangle CSG, OpenGL viewport, STL tooling, thermal fields, G-code, voxel FEM и topology optimization.
+DCad — исследовательский CAD/CAE-проект, который вырос из нескольких независимых экспериментов: voxel solid modeling, polygon CSG, OpenGL rendering, STL tooling, operation history, thermal fields, G-code, FEM и topology optimization.
 
-Теперь цель репозитория — **не развивать эти ветки как отдельные приложения, а постепенно собрать их сильные части в один CAD/CAE продукт**.
+С 2026 года цель репозитория другая: **не поддерживать ветки как отдельные программы, а собрать их сильные идеи в одно приложение**.
 
-Полный план объединения: [`docs/UNIFICATION_PLAN.md`](docs/UNIFICATION_PLAN.md).
+> Активная интеграционная ветка: **[`Unified-CAD`](https://github.com/Mika-dot/Cad/tree/Unified-CAD)**  
+> Подробный checklist объединения: [`docs/UNIFICATION_PLAN.md`](docs/UNIFICATION_PLAN.md)
 
-## Текущая архитектурная идея
+## Что уже объединено
+
+Первый рабочий vertical slice единого приложения уже существует:
 
 ```text
-                    DCad.App
-                       │
-        ┌──────────────┼──────────────┐
-        │              │              │
-  DCad.Viewport   Document/Commands   DCad.IO
-        │              │              │
-        ├──────────────┼──────────────┤
-        │              │              │
- Geometry.Mesh   Geometry.Voxel   Analysis / FEM
-        │              │              │
-        └──────────────┼──────────────┘
-                       │
-                 Optimization
-                       │
-                 Manufacturing
+.dcad modeling language
+          ↓
+     DCad.Language
+          ↓
+   IModelingKernel
+          ↓
+ robust polygon CSG
+          ↓
+ indexed mesh + validation
+      ┌───────┴────────┐
+      ↓                ↓
+   DCad.Cli         DCad.App
+     OBJ         OpenTK viewport
 ```
 
-Главный принцип: **ни voxel engine, ни FEM, ни polygon CSG не должны сами рисовать OpenGL или владеть UI**. Они должны отдавать `MeshData`, volumetric field или analysis layer в общий viewport.
+В `Unified-CAD` сейчас есть:
 
-## Карта веток
+- .NET 8 solution;
+- double-precision geometry core;
+- indexed triangle mesh;
+- centralized tolerance policy;
+- surface area / signed volume / AABB;
+- topology validation: degenerate, boundary, non-manifold and winding errors;
+- deterministic triangulation простых concave polygons;
+- deterministic point-in-solid без случайного ray casting;
+- robust triangle-solid CSG adapter;
+- box / sphere / cylinder;
+- union / difference / intersection;
+- translate / rotate / scale;
+- собственный `.dcad` language с параметрами и единицами;
+- CLI → OBJ;
+- OpenTK shader viewer;
+- regression tests;
+- Windows CI: build → tests → language → CSG → validated mesh.
 
-| Ветка | Что в ней ценного | Роль в будущем приложении | Текущий статус |
+Это не замена всех веток сразу. Это **общий каркас**, в который они постепенно подключаются.
+
+---
+
+# Карта репозитория
+
+| Ветка | Основная идея | Что уже модернизировано | Роль в едином DCad |
 |---|---|---|---|
-| **[`OpenGL`](https://github.com/Mika-dot/Cad/tree/OpenGL)** | camera, viewport interaction, scene rendering | `DCad.Viewport` | **обновлена: reusable CAD viewport** |
-| **[`VoxelСad`](https://github.com/Mika-dot/Cad/tree/Voxel%D0%A1ad)** | sparse voxels, implicit CSG, TPMS/lattice, morphology, STL | `DCad.Geometry.Voxel` | **основная volumetric ветка** |
-| **[`FEM_Voxel`](https://github.com/Mika-dot/Cad/tree/FEM_Voxel)** | voxel FEM, SIMP + OC, topology optimization | `DCad.Analysis`, `DCad.Optimization` | **основная CAE/optimization ветка** |
-| [`V1-Experiment`](https://github.com/Mika-dot/Cad/tree/V1-Experiment) | contour extrusion, boolean subtraction, history, G-code, temperature | commands, fields, manufacturing | историческая, но содержит полезные подсистемы |
-| [`V2-Experiment`](https://github.com/Mika-dot/Cad/tree/V2-Experiment) | triangle representation и polygon CSG | `DCad.Geometry.Mesh` | экспериментальная mesh-ветка |
-| [`Rendering-stl`](https://github.com/Mika-dot/Cad/tree/Rendering-stl) | STL/application visualization, machine UI ideas | `DCad.IO`, viewport adapters | archive / source of features |
-| [`Function-Basket`](https://github.com/Mika-dot/Cad/tree/Function-Basket) | старые алгоритмы и функции | reference/test archive | archive |
+| **[`Unified-CAD`](https://github.com/Mika-dot/Cad/tree/Unified-CAD)** | единое приложение | Core + mesh CSG + DSL + CLI + OpenTK + tests | **integration branch** |
+| **[`V2-Experiment`](https://github.com/Mika-dot/Cad/tree/V2-Experiment)** | polygon / triangle CAD | `ModernV2/Production` + managed BSP reference | `DCad.Geometry.Mesh` |
+| **[`VoxelСad`](https://github.com/Mika-dot/Cad/tree/Voxel%D0%A1ad)** | voxel / implicit / field CAD | primitives, CSG, morphology, TPMS, lattice, greedy STL, CLI | `DCad.Geometry.Voxel` |
+| **[`FEM_Voxel`](https://github.com/Mika-dot/Cad/tree/FEM_Voxel)** | FEM + topology optimization | SIMP/OC, sparse FEM, field exchange | `DCad.Analysis`, `DCad.Optimization` |
+| **[`OpenGL`](https://github.com/Mika-dot/Cad/tree/OpenGL)** | CAD viewport / renderer | reusable Camera/Scene + `ModernRenderer` VBO/VAO/shaders | `DCad.Viewport` |
+| **[`V1-Experiment`](https://github.com/Mika-dot/Cad/tree/V1-Experiment)** | first voxel CAD | `Modern/VoxelEngine`, `OperationHistory` + legacy G-code/temp | `DCad.Document`, Manufacturing, fields |
+| **[`Rendering-stl`](https://github.com/Mika-dot/Cad/tree/Rendering-stl)** | STL / visualization / application prototype | `ModernStl` toolkit | `DCad.IO` |
+| **[`Function-Basket`](https://github.com/Mika-dot/Cad/tree/Function-Basket)** | старые math experiments | `ModernGeometryLab` regression suite | `DCad.Tests` |
 
 ---
 
-# OpenGL — общий viewport foundation
+# V2-Experiment — explicit polygon geometry
 
-`OpenGL` раньше был простым SharpGL demo: два куба, fixed-function drawing и камера, логика которой находилась непосредственно в WinForms events.
+Изначальный V2 был одним из самых интересных экспериментов проекта: CAD-тело представлялось набором треугольников, а над meshes выполнялись boolean operations.
 
-В обновлении 2026 ветка перестроена в reusable viewport:
+Но старая реализация содержала фундаментальные numerical-geometry проблемы:
 
-- отдельный `Camera3D`;
-- orbit / pan / zoom;
-- Perspective и Orthographic;
-- стандартные Front/Back/Left/Right/Top/Bottom/Isometric views;
-- `Fit scene` / focus selected;
-- `Scene3D` и `SceneObject`;
-- `MeshData` как общий triangle-mesh contract;
-- CPU ray picking;
-- scene tree + `PropertyGrid`;
-- grid + XYZ axes;
-- lighting;
-- `Shaded`, `ShadedEdges`, `Wireframe`, `XRay`;
-- selection outline;
-- toolbar/status UI;
-- SharpGL `2.3.0.1` → `3.1.1`;
-- Windows CI.
+- line intersection через slope/intercept;
+- деление на ноль для вертикальных/почти параллельных линий;
+- fixed epsilon без учёта масштаба модели;
+- rounding intersection points;
+- ad-hoc triangulation;
+- random ray casting для проверки точки внутри solid;
+- отсутствие строгой проверки manifold topology результата.
 
-Эта ветка должна стать визуальным фундаментом для остальных модулей, а не очередным отдельным CAD demo.
+Теперь ветка разделена:
 
-Следующий шаг renderer-а: GPU mesh cache через VBO/index buffers, shaders, framebuffer ID picking, MSAA и section/clipping passes. API `Camera3D / Scene3D / MeshData` при этом должен сохраниться, чтобы backend можно было заменить независимо от CAD kernels.
+```text
+V2-Experiment
+├── GL/                       historical implementation
+└── ModernV2/
+    ├── *.cs                  readable managed BSP reference
+    └── Production/           current production polygon path
+```
+
+`ModernV2/Production` содержит тот же подход, который уже проверяется в `Unified-CAD`:
+
+- indexed `Mesh3d`;
+- double precision;
+- mesh validator;
+- deterministic polygon triangulation;
+- deterministic point-in-solid;
+- production CSG adapter;
+- `.dcad` language;
+- OpenTK application;
+- tests and CI.
+
+Managed BSP оставлен намеренно: он полезен как понятная исследовательская реализация CSG, но production app не должен зависеть от него на сложной геометрии.
 
 ---
 
-# VoxelСad — volumetric geometry kernel
+# VoxelСad — volumetric / implicit CAD
 
-`VoxelСad` — направление для geometry-as-volume / field CAD.
+`VoxelСad` — второй полноценный geometry backend. Он работает не с явной triangle surface, а с occupancy/implicit field.
 
 Реализовано:
 
-- sparse occupancy grid;
-- CSG union / difference / intersection;
-- implicit/SDF-like rasterization API;
-- box, sphere, cylinder, torus, arbitrary-axis capsule;
-- Gyroid и Schwarz-P TPMS;
-- BCC lattice;
-- dilation / erosion / opening / closing;
-- majority smoothing;
-- connected-component cleanup;
-- volume / surface metrics;
-- greedy STL meshing;
-- JSON scene DSL;
-- headless JSON → STL pipeline;
-- FEM bridge с согласованными mm / N / MPa единицами;
-- CI smoke pipeline.
+### Geometry
 
-Roadmap ветки: binary occupancy → sparse bricks → persistent SDF/level set → adaptive VDB/octree → Marching Cubes / Dual Contouring → GPU/NanoVDB.
+- sparse voxel occupancy;
+- box;
+- sphere;
+- cylinder;
+- torus;
+- arbitrary-axis capsule/strut;
+- generic implicit field rasterization.
+
+### CSG
+
+- union;
+- difference;
+- intersection.
+
+### Morphology
+
+- dilation;
+- erosion;
+- opening;
+- closing;
+- 6/18/26-neighbourhood;
+- majority smoothing;
+- largest connected component cleanup.
+
+### Architected materials
+
+- Gyroid TPMS;
+- Schwarz-P TPMS;
+- BCC lattice.
+
+### Output / engineering
+
+- volume and surface metrics;
+- surface voxels;
+- greedy STL meshing;
+- JSON operation scene;
+- headless scene → STL CLI;
+- FEM bridge;
+- corrected mm / N / MPa convention;
+- CI smoke test.
+
+Дальнейшее направление:
+
+```text
+binary occupancy
+      ↓
+sparse bricks/chunks
+      ↓
+narrow-band SDF / level set
+      ↓
+adaptive octree / VDB
+      ↓
+Dual Contouring / QEF
+      ↓
+GPU sparse fields
+```
+
+В едином приложении mesh и voxel — не конкурирующие CAD версии. Это разные представления одной geometry graph:
+
+```text
+analytic / operations
+        │
+    ┌───┴────┐
+    │        │
+ Triangle   SDF/Voxel
+   Mesh       Field
+    │        │
+    └───↔────┘
+```
 
 ---
 
-# FEM_Voxel — CAE и topology optimization
+# FEM_Voxel — CAE / topology optimization
 
-`FEM_Voxel` содержит уже не просто voxel visualization, а расчётное направление:
+Ветка выросла из voxel FEM эксперимента в отдельный analysis backend.
 
+Реализовано:
+
+- regular voxel/hexa grid;
+- sparse FEM assembly;
 - density-based SIMP;
 - Optimality Criteria update;
-- density/sensitivity filtering;
-- projection/continuation;
-- sparse regular-grid FEM assembly;
+- sensitivity/density filtering;
+- projection and continuation;
 - connectivity-aware final geometry;
-- OpenSCAD pipeline;
-- metrics and optimization artifacts.
+- multi-load experiments;
+- density/stress/result fields;
+- artifacts and metrics;
+- field interchange format;
+- единицы mm / N / MPa.
 
-Целевая интеграция:
+Целевая связь:
 
 ```text
-CAD geometry / voxel field
-          ↓
-       FEM solve
-          ↓
- density / stress / displacement fields
-          ↓
- Viewport field layer
-          ↓
- topology / lattice / TPMS generation
+CAD object
+    ↓
+voxel / FEM domain
+    ↓
+loads + supports + material
+    ↓
+FEM / SIMP
+    ↓
+stress / displacement / density
+    ├──→ viewport overlays
+    └──→ lattice / TPMS generator
 ```
 
-В итоге stress/density должны не только показываться картинкой, а напрямую управлять толщиной lattice/TPMS или локальным материалом.
+То есть FEM должен стать не отдельным Python UI, а analysis service общего документа.
 
 ---
 
-# V1-Experiment — не выбрасывать
+# OpenGL — viewport and rendering research
 
-Несмотря на возраст, `V1-Experiment` содержит несколько вещей, которых нет в более новых ветках:
+Эта ветка начиналась с учебного SharpGL cube demo.
+
+Сейчас здесь два уровня:
+
+### Compatibility viewport
+
+- `Camera3D`;
+- orbit / pan / zoom;
+- perspective / orthographic;
+- standard CAD views;
+- scene objects;
+- selection;
+- grid / axes;
+- shaded / edges / wireframe / x-ray;
+- property editing.
+
+### `ModernRenderer`
+
+- OpenTK 4;
+- OpenGL core profile;
+- VBO / VAO / EBO;
+- indexed triangle drawing;
+- vertex + fragment shaders;
+- normals;
+- lighting;
+- scalar field / heatmap attribute;
+- wireframe mode;
+- modern camera interaction.
+
+В `Unified-CAD` уже используется тот же современный OpenTK direction. Следующий этап — перенести лучшие CAD interaction-функции из compatibility viewport в общий renderer, а не поддерживать два UI.
+
+---
+
+# V1-Experiment — operation history, manufacturing and fields
+
+V1 не нужно выбрасывать из-за возраста. В ней появились идеи, которые важны для полноценного CAD:
 
 - contour → extrusion;
-- сохранение не только результата, а операций построения;
-- boolean subtraction через voxel representation;
-- temperature field;
-- G-code generation.
+- voxel solid editing;
+- сохранение операций, а не только финальной геометрии;
+- transforms;
+- G-code;
+- temperature field.
 
-Из этой ветки стоит переносить **концепции**, а не старые массивы и UI:
+В ветке уже появился modern layer:
 
-```text
-ExtrudeCommand
-BooleanCommand
-TemperatureField
-ManufacturingJob / GCodeExporter
-```
+- `Modern/VoxelEngine`;
+- `Modern/OperationHistory`;
+- modern demo UI.
 
-Это потенциально станет началом history/command system итогового CAD.
-
----
-
-# V2-Experiment — polygon / mesh kernel
-
-`V2-Experiment` нужен как отдельное направление, потому что не всё стоит переводить в voxels.
-
-Его задача в unified DCad:
-
-- triangle mesh representation;
-- mesh transforms;
-- mesh repair;
-- polygon boolean experiments;
-- mesh ↔ voxel/SDF conversion;
-- импорт/экспорт STL/OBJ/PLY.
-
-В перспективе DCad должен уметь одновременно держать:
-
-```text
-B-Rep / imported mesh
-        ↕
- triangle mesh
-        ↕
- voxel / SDF field
-```
-
-и выбирать представление под конкретную задачу.
-
----
-
-# Что должно получиться в итоге
-
-Целевая solution structure:
-
-```text
-DCad.sln
-  DCad.App
-  DCad.Viewport
-  DCad.Geometry.Core
-  DCad.Geometry.Mesh
-  DCad.Geometry.Voxel
-  DCad.Analysis
-  DCad.Optimization
-  DCad.Manufacturing
-  DCad.IO
-  DCad.Tests
-```
-
-## Общий document model
-
-Вместо отдельных `save.txt`, локальных массивов и branch-specific state нужен единый документ:
+Главная ценность V1 для unified app теперь не её renderer, а концепция:
 
 ```text
 Document
- ├─ Objects
- │   ├─ Geometry source
- │   ├─ Transform
- │   ├─ Parameters
- │   └─ Appearance
- ├─ Operation history
- ├─ Analysis cases
- ├─ Result fields
- └─ Manufacturing jobs
+  └── Operation History
+        ├── Create
+        ├── Extrude
+        ├── Transform
+        ├── Boolean
+        ├── Voxelize
+        ├── Analyze
+        └── Manufacturing
 ```
 
-Так появятся нормальные:
-
-- undo / redo;
-- parametric operation history;
-- project save/load;
-- object tree;
-- common selection;
-- one viewport for mesh/voxel/FEM;
-- reproducible calculations;
-- batch/headless processing.
-
-## Ближайший порядок объединения
-
-1. Общие math/transform/bounds/contracts.
-2. `VoxelСad → MeshData` adapter.
-3. `V2 → MeshData` adapter.
-4. STL loader → `MeshData`.
-5. FEM result → viewport field layer.
-6. Document + command history.
-7. Undo/redo + project format.
-8. Measurement, snapping, section/clipping.
-9. Mesh ↔ voxel/SDF conversion.
-10. Unified generative workflow: FEM → density/stress → lattice/TPMS → export.
+Именно отсюда должен вырасти persistent operation graph + undo/redo.
 
 ---
 
-# Современные технические ориентиры
+# Rendering-stl — IO layer
 
-Для volumetric части наиболее логичны OpenVDB / NanoVDB и в research-сценариях fVDB. Для surface extraction — Marching Cubes и Dual Contouring/QEF. Для render backend текущий SharpGL используется как compatibility bridge, но архитектура viewport должна позволить перейти на современный VBO/shader/FBO pipeline или другой .NET graphics backend без изменения geometry kernels.
+Историческая часть ветки — большой WinForms/machine hackathon prototype.
 
-Базовые работы:
+Полезный современный результат — `ModernStl`, который должен быть перенесён в `DCad.IO`.
 
-- Frisken et al., *Adaptively Sampled Distance Fields*, SIGGRAPH 2000 — https://doi.org/10.1145/344779.344899
-- Ju et al., *Dual Contouring of Hermite Data*, SIGGRAPH 2002 — https://doi.org/10.1145/566570.566586
-- Museth, *VDB: High-Resolution Sparse Volumes with Dynamic Topology*, TOG 2013 — https://doi.org/10.1145/2487228.2487235
-- Kämpe et al., *High Resolution Sparse Voxel DAGs*, TOG 2013 — https://doi.org/10.1145/2461912.2462024
-- Williams et al., *fVDB*, SIGGRAPH 2024 — https://doi.org/10.1145/3658226
+Итоговый IO layer должен отвечать за:
 
-DCad теперь рассматривается не как набор старых экспериментов, а как **набор уже проверенных идей, которые постепенно сводятся к общей CAD/CAE архитектуре**.
+- STL binary / ASCII;
+- OBJ;
+- PLY;
+- 3MF;
+- mesh validation/repair report;
+- единицы и metadata;
+- позже STEP через B-Rep adapter;
+- project files.
+
+Renderer не должен сам загружать STL, а geometry kernel не должен сам писать файл на диск.
+
+---
+
+# Function-Basket — geometry regression lab
+
+Старые каталоги «точка внутри», «пересечения двух треугольников» и другие experiments сохранены как исторический corpus.
+
+Добавлен `ModernGeometryLab`:
+
+- .NET 8 tests;
+- concave triangulation area invariant;
+- `n-2` polygon triangulation invariant;
+- rejection of self-intersecting polygons;
+- CSG volume identities;
+- closed/oriented manifold checks;
+- repeatable point-in-solid tests.
+
+Это будущий `DCad.Tests`: любой новый geometry bug должен сначала появляться здесь как воспроизводимый test case.
+
+---
+
+# Целевая архитектура
+
+```text
+                         DCad.App
+                            │
+                    DCad.Document
+                            │
+                    DCad.Language
+                            │
+                    Operation Graph
+                            │
+                 Geometry Kernel API
+            ┌───────────────┼──────────────┐
+            │               │              │
+        Mesh/Polygon     Voxel/SDF       B-Rep
+            │               │              │
+            └───────────┬───┴──────────────┘
+                        │
+                Mesh / Field contracts
+          ┌─────────────┼───────────────┐
+          │             │               │
+     DCad.Viewport   DCad.IO       DCad.Analysis
+                                      │
+                                DCad.Optimization
+                                      │
+                               lattice / TPMS
+                                      │
+                             DCad.Manufacturing
+```
+
+## Почему несколько geometry backends
+
+Одного универсального представления недостаточно:
+
+- B-Rep лучше для точной инженерной parametric geometry, STEP/NURBS;
+- triangle mesh удобен для imported geometry, rendering, repair и быстрых surface operations;
+- voxel/SDF удобен для topology, scans, morphology, lattices, complex booleans и fields.
+
+Задача DCad — дать им **один document/operation layer**, а не выбрать одно представление и заставить его решать все задачи.
+
+---
+
+# Modeling language
+
+Уже работающий первый вариант:
+
+```text
+param width = 60mm;
+param depth = 40mm;
+param height = 8mm;
+
+let body = box(width, depth, height);
+let hole = cylinder(20mm, 5mm);
+let left  = translate(hole, -20mm, 0mm, 0mm);
+let right = translate(hole,  20mm, 0mm, 0mm);
+
+solid result = body - left - right;
+```
+
+Current operators:
+
+| Syntax | Operation |
+|---|---|
+| `+` | union |
+| `-` | difference |
+| `&` | intersection |
+| `box(...)` | box |
+| `sphere(...)` | sphere |
+| `cylinder(...)` | cylinder |
+| `translate(...)` | translation |
+| `rotate(...)` | rotation |
+| `scale(...)` | scale |
+
+Units: `mm`, `cm`, `m`, `deg`.
+
+Дальше язык должен получить:
+
+- persistent AST / operation graph;
+- sketches;
+- constraints;
+- extrude / revolve / sweep / loft;
+- arrays / patterns / mirror;
+- named selections;
+- analysis cases;
+- manufacturing commands;
+- reusable functions/components.
+
+---
+
+# Инженерные правила проекта
+
+Чтобы старые numerical bugs не вернулись в общий kernel:
+
+1. geometry math — `double` по умолчанию;
+2. tolerance задаётся централизованно и зависит от масштаба;
+3. нельзя округлять geometry coordinates как способ «починить» intersection;
+4. random ray casting не является production point-in-solid algorithm;
+5. solid mesh проходит topology validation;
+6. boundary/non-manifold errors не скрываются;
+7. units хранятся явно;
+8. UI не содержит geometry/FEM algorithms;
+9. renderer получает готовый mesh/field packet;
+10. каждый найденный баг получает regression test.
+
+---
+
+# Ближайшие задачи
+
+1. Persistent `DCad.Document` + operation graph.
+2. Undo / redo + project save/load.
+3. Общий `ScenePacket / FieldLayer` между geometry/FEM/renderer.
+4. `VoxelСad` adapter в `Unified-CAD`.
+5. mesh ↔ voxel/SDF conversion.
+6. перенести STL toolkit в `DCad.IO`.
+7. подключить FEM request/result protocol.
+8. stress/displacement/density overlays в общем viewport.
+9. sketch/constraint subsystem.
+10. B-Rep/STEP backend.
+11. FEM → stress-driven lattice/TPMS workflow.
+12. manufacturing/slicing/G-code из V1.
+
+Репозиторий теперь рассматривается как **эволюция одного CAD/CAE-движка**, где старые ветки сохраняют историю алгоритмов, а современные каталоги и `Unified-CAD` постепенно формируют единое приложение.
