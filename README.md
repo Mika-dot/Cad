@@ -1,105 +1,125 @@
-# DCad
-University attempt to make CAD entirely on the web.
+# DCad — Rendering-STL / mesh I/O & manufacturing geometry
 
----
+Эта ветка исторически появилась как часть хакатонного проекта: STL-модели оборудования, SharpGL viewer, графики и ПО станка. Исторические материалы (`Rendering stl/`, `body/`, `bunker hydrodynamics/`, `media/`) сохранены, но ветка теперь получает вторую роль — **общий STL/mesh I/O и validation модуль** будущего DCad.
 
-## Требуется установить zedgraph через nuget.
+## ModernStl
 
-![Как установить пакеты](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/1.PNG)
+Современная часть находится в:
 
----
+```text
+ModernStl/
+├── DCad.StlToolkit.csproj
+├── StlToolkit.cs
+├── StlToolkit.Advanced.cs
+└── Program.cs
+```
 
-Это программа для хакатона ВИХрь.
+Это standalone .NET 8 toolkit без зависимости от старого WinForms UI.
 
-Измочалено написана как ПО для станка по созданию пирожных картошка.
+### Поддерживается
 
-~~Самые прикольные пирожные в мире, отчасти я и согласился на хакатон~~
+- auto-detect binary/ASCII STL;
+- binary + ASCII STL write;
+- OBJ export;
+- surface area;
+- enclosed absolute volume;
+- bounding box;
+- degenerate triangle detection;
+- duplicate triangle detection;
+- boundary edge audit;
+- non-manifold edge audit;
+- **unique welded vertex count**;
+- **connected shell/component count**;
+- **isolated triangle components**;
+- **directed edge/winding consistency diagnostics**;
+- tolerance-based vertex welding;
+- basic repair = weld + remove degenerate + remove duplicate faces;
+- scale transform;
+- built-in closed-cube round-trip self-test.
 
-Так что разложены на составляющие задачи:
+## CLI
 
-- Разработать 3D модель.
-- Разработка ПО для Arduino
-- Разработка ПО для компьютера
+```bash
+dotnet run --project ModernStl/DCad.StlToolkit.csproj -- model.stl
+```
 
-Кратко об 3D модели.
+Repair:
 
-Выполнена как 3 независимых блока и дерево выглядит примерно так:
+```bash
+dotnet run --project ModernStl/DCad.StlToolkit.csproj -- \
+  broken.stl --repair repaired.stl --weld 0.000001
+```
 
-1. Бункер
-1. Блок шнековых модулей
-   1. Шнековые модули
-1. Стол
+OBJ conversion:
 
-Бункер 
+```bash
+dotnet run --project ModernStl/DCad.StlToolkit.csproj -- model.stl --obj model.obj
+```
 
-Выполнен с помощью листового метала ASIS 304
+Self-test:
 
-В качестве соединение используется сварка. Так же так как это хакатон, то надо показывать инновации, так что используется гидродинамический эффект для создания давления рядом со шнеками. Он спроектирован так что бы можно было визуально оценить загрязнённость элементов за счет использования блестящего метала и отсутствия обратных выступов.
+```bash
+dotnet run --project ModernStl/DCad.StlToolkit.csproj -- --self-test
+```
 
-Так же в место использования квадрата в качестве внешнего жёсткого корпуса эти функции выполняет части бункера с каждой стороны.
+## Почему эта ветка нужна, если V2 уже работает с triangles
 
-Сам бункер смоделирован в написанной для этого программе и выглядит так:
+`V2-Experiment` исследует **создание/изменение** mesh и Boolean operations.
 
-- Чем краснее тем больше давление и наоборот
+`Rendering-stl` должен отвечать за **границу с внешними файлами**:
 
-![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.001.png)
+```text
+external STL/OBJ/3MF
+        |
+        v
+  import + audit + repair
+        |
+        v
+ shared indexed mesh
+    |             |
+    v             v
+ V2 CSG        OpenGL renderer
+    |
+    v
+ voxel/SDF conversion
+```
 
-Блок шнековых модулей
+Это позволяет не размазывать STL parser, normal repair и manifold checks по нескольким CAD engines.
 
-Выпилено с ранее описанными требованиями к бункеру. 
+## Следующие задачи
 
-Так же для разделения грязной и чистой зоны была введена буферная зона.
+1. перейти с triangle soup на общий indexed half-edge mesh DTO;
+2. consistent face orientation propagation по connected shells;
+3. hole boundary loop extraction;
+4. small-hole filling;
+5. self-intersection broad-phase через BVH;
+6. component filtering по volume/area;
+7. mesh simplification;
+8. remeshing и feature-edge preservation;
+9. normal generation: flat/smooth/crease angle;
+10. PLY support;
+11. 3MF support с units/material metadata;
+12. mesh voxelization и SDF conversion;
+13. glTF как viewport/cache формат;
+14. direct adapter в `OpenGL/MeshData`;
+15. manufacturing checks: minimum wall, trapped shells, watertightness, build dimensions.
 
-![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.002.png)
+## Хакатонная часть
 
-Шнековые модули
+Старый проект по станку и бункеру не удаляется: он остаётся примером того, откуда выросли STL/rendering эксперименты. Но README теперь отделяет историческое приложение от reusable geometry tooling.
 
-Тут самое прикольно, суть этой штуки это сделать так что бы весь механизм находился только внутри этой штуки, так что если их вынуть то в станке не останется подвижных частей. 
+## Роль в едином DCad
 
-Между собой они соединены ремённой передачей для предотвращения ударных нагрузок. 
+```text
+DCad.IO.Mesh
+   ├── STL import/export       <- эта ветка
+   ├── OBJ/PLY/3MF
+   ├── audit / repair
+   └── mesh normalization
 
-И крепиться с задней стороны 4 болтами. Сами по себе шнеки выходят спереди и имеют возможность замены блока на другой блок с другими передаточными числами и геометрией шнеков. 
+DCad.Geometry.Mesh             <- V2
+DCad.Rendering                 <- OpenGL
+DCad.Geometry.Volume           <- V1/VoxelCAD
+```
 
-Стол
-
-Ну тут все понятно он Гост и добавлен этаж под установку двигателя.
-
-ПО для МК
-
-Это схема стандартная для подобных устройств.
-
-- Экран для выполнения необходимой информации
-- Джойстик для ручного ведения нужной информации и кнопкой экстренного прекращения работы установки.
-- Мотор с оптическим эндодерм для контроля скорости и увеличения мощности в случае блокировки вала.
-
-~~Фото не прилагаю так как разобрал.~~ 
-
-ПО для компа
-
-Состоит из 4 окон и они являются стандартными.
-
-1. Головной
-   1. Станок
-   1. Выбор смеси
-   1. Старт 
-   1. Стоп
-1. Настройки
-   1. Настройки смеси
-   1. Время жизни каждой детали
-1. Просмотр характеристик
-   1. Сама деталь
-   1. График износа делали
-1. Логи
-
-![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.003.png)
-
-Рис 1
-
-![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.004.png)
-
-Рис 2
-
-![](https://github.com/Mika-dot/Cad/blob/Rendering-stl/media/Aspose.Words.45507d75-8b15-476e-aff1-1cfef60e83c3.005.png)
-
-Рис 3
-
+Именно так старый `Rendering-stl` превращается в полезный самостоятельный subsystem вместо ещё одного отдельного viewer.
