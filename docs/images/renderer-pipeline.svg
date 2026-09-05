@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="400" viewBox="0 0 1100 400" role="img" aria-labelledby="title desc">
+  <title id="title">Два пути визуализации в ветке OpenGL</title><desc id="desc">WinForms SharpGL и отдельный OpenTK рендерер.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="#34d399"/></marker></defs>
+  <rect width="1100" height="400" rx="24" fill="#071a16"/>
+  <text x="55" y="58" fill="#ecfdf5" font-family="Segoe UI,Arial" font-size="30" font-weight="700">OpenGL: два самостоятельных демонстратора</text>
+  <rect x="55" y="115" width="220" height="180" rx="14" fill="#123c32" stroke="#34d399" stroke-width="2"/><text x="165" y="158" fill="#d1fae5" font-family="Segoe UI,Arial" font-size="21" font-weight="700" text-anchor="middle">MeshData</text><text x="165" y="190" fill="#a7f3d0" font-family="Segoe UI,Arial" font-size="15" text-anchor="middle">позиции · нормали</text><text x="165" y="214" fill="#a7f3d0" font-family="Segoe UI,Arial" font-size="15" text-anchor="middle">индексы · scalar</text>
+  <rect x="380" y="95" width="300" height="105" rx="14" fill="#123c32" stroke="#34d399" stroke-width="2"/><rect x="380" y="230" width="300" height="105" rx="14" fill="#123c32" stroke="#34d399" stroke-width="2"/>
+  <text x="530" y="135" fill="#d1fae5" font-family="Segoe UI,Arial" font-size="21" font-weight="700" text-anchor="middle">SharpGL / .NET Framework 4.8</text><text x="530" y="169" fill="#a7f3d0" font-family="Segoe UI,Arial" font-size="15" text-anchor="middle">WinForms · scene tree · picking</text>
+  <text x="530" y="270" fill="#d1fae5" font-family="Segoe UI,Arial" font-size="21" font-weight="700" text-anchor="middle">OpenTK 4 / .NET 8</text><text x="530" y="304" fill="#a7f3d0" font-family="Segoe UI,Arial" font-size="15" text-anchor="middle">VBO/VAO/EBO · GLSL · heatmap</text>
+  <rect x="785" y="145" width="260" height="140" rx="14" fill="#065f46" stroke="#6ee7b7" stroke-width="2"/><text x="915" y="198" fill="#ecfdf5" font-family="Segoe UI,Arial" font-size="23" font-weight="700" text-anchor="middle">Viewport</text><text x="915" y="232" fill="#d1fae5" font-family="Segoe UI,Arial" font-size="15" text-anchor="middle">orbit · zoom · wireframe</text>
+  <g stroke="#34d399" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M275 175 C320 175 330 147 370 147"/><path d="M275 235 C320 235 330 282 370 282"/><path d="M680 147 C730 147 735 190 775 200"/><path d="M680 282 C730 282 735 240 775 230"/></g>
+  <text x="55" y="365" fill="#6ee7b7" font-family="Segoe UI,Arial" font-size="16">Общий IRenderBackend в коде пока отсутствует; объединение двух путей — отдельная задача.</text>
+</svg>

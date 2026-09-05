@@ -1,141 +1,96 @@
-# DCad — OpenGL viewport foundation
+# OpenGL — визуализация DCad
 
-`OpenGL` — базовая ветка визуализации DCad. Раньше это был учебный SharpGL-пример: два захардкоженных куба, `GL_QUADS`, камера в обработчике `Resized` и управление WASD. Теперь ветка оформлена как **reusable CAD viewport**, который должен стать общей визуальной оболочкой для `VoxelСad`, `FEM_Voxel`, `V1-Experiment`, `V2-Experiment` и STL-инструментов.
+[![OpenGL foundation CI](https://github.com/Mika-dot/Cad/actions/workflows/opengl-ci.yml/badge.svg?branch=OpenGL)](https://github.com/Mika-dot/Cad/actions/workflows/opengl-ci.yml)
+[![Modern Renderer CI](https://github.com/Mika-dot/Cad/actions/workflows/modern-renderer-ci.yml/badge.svg?branch=OpenGL)](https://github.com/Mika-dot/Cad/actions/workflows/modern-renderer-ci.yml)
 
-## CAD viewport layer
+Ветка содержит два независимых демонстратора: WinForms/SharpGL на .NET Framework 4.8 и небольшой OpenTK renderer на .NET 8. Общего `IRenderBackend` между ними пока нет.
 
-Уже реализованы:
+![Два пути визуализации](docs/images/renderer-pipeline.svg)
 
-- отдельный `Camera3D`: orbit / pan / zoom, perspective + orthographic, стандартные CAD-виды, `Fit`;
-- отдельная `Scene3D`: список объектов, selection, scene bounds, CPU ray picking;
-- `MeshData` + `MeshFactory`: треугольные mesh вместо логики «нарисовать куб прямо в форме»;
-- отдельный `ViewportRenderer`;
-- тёмная CAD-сцена, координатная сетка, X/Y/Z axes, depth test, smooth lighting;
+## 1. WinForms / SharpGL viewport
+
+Каталог: `OpenGL_lesson_CSharp/`.
+
+Реализовано:
+
+- `Camera3D`: perspective/orthographic, orbit, pan, zoom, fit и стандартные виды;
+- `Scene3D` и `SceneObject`;
+- CPU ray picking;
+- scene tree и `PropertyGrid`;
+- grid и оси;
 - режимы `Shaded`, `ShadedEdges`, `Wireframe`, `XRay`;
 - подсветка выбранного объекта;
-- scene tree + `PropertyGrid` для редактирования transform/color;
-- toolbar: Fit, Isometric, Front, Top, Right, projection, grid, lighting, render mode;
-- status bar с режимом камеры/рендера и selection;
-- SharpGL обновлён с `2.3.0.1` до `3.1.1`;
-- Windows CI.
+- изменение transform и цвета через инспектор.
 
-## Новое: ModernRenderer GPU backend experiment
-
-Добавлен второй renderer path:
-
-```text
-ModernRenderer/
-├── DCad.Renderer.csproj
-├── MeshData.cs
-├── ShaderProgram.cs
-├── ViewerWindow.cs
-└── Program.cs
-```
-
-Это .NET 8 + **OpenTK 4.9.4 / OpenGL 3.3 Core**. Он нужен не вместо текущего богатого CAD UI, а как prototype будущей GPU-части:
-
-- VAO / VBO / EBO;
-- indexed triangles;
-- GLSL vertex/fragment shaders;
-- per-vertex scalar values;
-- scalar heatmap;
-- normal-based lighting;
-- depth + culling;
-- orbit/zoom;
-- wireframe toggle.
-
-Запуск:
-
-```bash
-dotnet run --project ModernRenderer/DCad.Renderer.csproj
-```
-
-На 2026 год stable OpenTK 4.x остаётся более консервативным выбором для этого prototype: OpenTK 5 доступен как prerelease. Поэтому backend закреплён на `4.9.4`, а не на pre-release API.
-
-## Управление legacy/CAD viewport
-
-| Действие | Управление |
-|---|---|
-| Select | ЛКМ |
-| Orbit | ПКМ drag или `Alt + ЛКМ drag` |
-| Pan | СКМ drag или `Shift + ЛКМ drag` |
-| Zoom | колесо мыши |
-| Fit scene | `F` |
-| Perspective / Orthographic | `P` |
-| Grid | `G` |
-| Lighting | `L` |
-| Render mode | `W` |
-| Front / Back / Left / Right / Top / Bottom / Iso | `1..7` |
-| Deselect | `Esc` |
-| Focus selected | double click |
-
-## Целевая архитектура
-
-Нельзя выбирать между «текущим SharpGL viewport» и «новым OpenTK viewer» как между двумя приложениями. Их надо скрестить по слоям:
-
-```text
-DCad UI / tools
-      |
-      +-- Scene3D
-      +-- Camera3D
-      +-- selection / properties / gizmos
-      |
-      v
-IRenderBackend
-      |
-      +-- SharpGLCompatibilityBackend   <- текущий CAD viewport
-      +-- OpenTkGpuBackend              <- ModernRenderer
-             |
-             +-- VBO/EBO cache
-             +-- shaders
-             +-- ID framebuffer picking
-             +-- field visualization
-```
-
-То есть UI/scene logic сохраняется, а непосредственный GPU backend становится заменяемым.
-
-## Geometry contract
-
-Renderer не должен знать, как была создана фигура:
-
-```text
-V2 triangle mesh --------+
-                         |
-Rendering-STL ------------+--> indexed MeshData --> renderer
-                         |
-VoxelCAD surface mesher --+
-                         |
-FEM density/stress -------+--> vertex/cell scalar attributes
-```
-
-Именно поэтому `MeshData` должен стать общим DTO: positions, normals, triangle indices и optional scalar/material/object IDs.
-
-## Сборка существующего CAD viewport
+Сборка требует Windows, Visual Studio Build Tools/MSBuild и .NET Framework 4.8:
 
 ```powershell
 nuget restore OpenGL_lesson_CSharp\OpenGL_lesson_CSharp.sln
 msbuild OpenGL_lesson_CSharp\OpenGL_lesson_CSharp.sln /m /p:Configuration=Release /p:Platform=x86
 ```
 
-Требуется Windows и .NET Framework 4.8.
+Управление:
 
-## Следующие этапы
+| Действие | Ввод |
+|---|---|
+| выбрать объект | ЛКМ |
+| orbit | ПКМ + drag или `Alt` + ЛКМ + drag |
+| pan | СКМ + drag или `Shift` + ЛКМ + drag |
+| zoom | колесо |
+| fit | `F` |
+| perspective / orthographic | `P` |
+| grid / lighting / render mode | `G` / `L` / `W` |
+| front, back, left, right, top, bottom, isometric | `1`…`7` |
+| снять выбор | `Esc` |
 
-1. общий `IRenderBackend`;
-2. adapters `MeshData` для V2, STL и VoxelCAD;
-3. persistent GPU mesh cache вместо upload каждый кадр;
-4. integer object/face ID framebuffer picking;
-5. silhouette selection outline pass;
-6. MSAA + resolve;
-7. clipping/section planes и clipping box;
-8. measurement tools: distance, angle, radius, dimensions;
-9. translate/rotate/scale gizmo + snapping;
-10. scene layers: geometry / FEM / temperature / stress / density;
-11. large-model chunks, frustum culling и LOD;
-12. offscreen screenshot/report renderer;
-13. voxel instancing/indirect draw для debug volume mode;
-14. PBR/environment lighting для нормального CAD viewport.
+Архивный снимок ранней версии интерфейса:
 
-## Роль ветки
+![Ранняя версия SharpGL viewer](<Media/Вид прогаммы v1.PNG>)
 
-`OpenGL` становится **единственным rendering/view layer** будущего приложения. Ни V1, ни V2, ни FEM не должны иметь собственную долгоживущую систему камер, selection и визуальных режимов — они должны отдавать геометрию/fields этому модулю.
+## 2. ModernRenderer
+
+Каталог: `ModernRenderer/`.
+
+Это OpenTK 4.9.4 / OpenGL 3.3 Core пример с VAO/VBO/EBO, GLSL, indexed triangles, нормалями и scalar heatmap.
+
+```bash
+dotnet run --project ModernRenderer/DCad.Renderer.csproj
+```
+
+Управление:
+
+| Действие | Ввод |
+|---|---|
+| orbit | ЛКМ + drag |
+| zoom | колесо |
+| wireframe | `W` |
+| heatmap | `H` |
+| сброс вида | `F` |
+| выход | `Esc` |
+
+`ViewportMath.cs` содержит расчёт screen ray, ray/triangle picking и линейное/log/symmetric нормирование scalar field. Эти функции компилируются вместе с renderer, но отдельными unit-тестами пока не покрыты.
+
+## Что проверяет CI
+
+- Windows workflow восстанавливает NuGet и собирает SharpGL-проект в Release/x86.
+- Ubuntu workflow собирает `ModernRenderer` на .NET 8.
+
+CI не создаёт OpenGL context, не открывает окно и не сравнивает кадры. Зелёная сборка не проверяет работу драйвера и визуальный результат.
+
+## Ограничения
+
+- демонстраторы используют разные типы mesh и камеры;
+- нет загрузки общей сцены DCad;
+- нет GPU object/face ID picking;
+- отсутствуют clipping planes, gizmo, измерения и snapping;
+- нет тестов матриц камеры и выбора объектов;
+- legacy-путь привязан к Windows/x86/SharpGL;
+- ModernRenderer отображает только встроенную demo mesh.
+
+## Следующая работа
+
+1. Перенести общий `MeshData` и интерфейс камеры в `Unified-CAD`.
+2. Добавить unit-тесты для `ViewportMath` без запуска окна.
+3. Загружать `Mesh3d` и scalar fields из единого документа.
+4. Реализовать object/face ID framebuffer и рамку выбора.
+5. После переноса оставить в этой ветке только исторические сравнения renderer.
