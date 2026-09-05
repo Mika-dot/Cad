@@ -17,3 +17,8 @@ jobs:
         run: nuget restore "Cadv1.e\OpenGL_lesson_CSharp.sln"
       - name: Build
         run: msbuild "Cadv1.e\OpenGL_lesson_CSharp.sln" /m /p:Configuration=Release /p:Platform=x86
+      - name: Operation history self test
+        shell: pwsh
+        run: |
+          & "Cadv1.e\OpenGL_lesson_CSharp\bin\Release\OpenGL_lesson_CSharp.exe" --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
