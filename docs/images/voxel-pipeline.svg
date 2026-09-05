@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="390" viewBox="0 0 1120 390" role="img" aria-labelledby="title desc">
+  <title id="title">Поток данных VoxelCAD</title><desc id="desc">JSON операции превращаются в разреженную occupancy-сетку и STL.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0v6l9-3z" fill="#2dd4bf"/></marker></defs>
+  <rect width="1120" height="390" rx="24" fill="#071c1b"/>
+  <text x="55" y="58" fill="#f0fdfa" font-family="Segoe UI,Arial" font-size="30" font-weight="700">VoxelСad: реализованный путь JSON → STL</text>
+  <g fill="#123b39" stroke="#2dd4bf" stroke-width="2"><rect x="45" y="120" width="190" height="120" rx="14"/><rect x="280" y="120" width="205" height="120" rx="14"/><rect x="530" y="120" width="220" height="120" rx="14"/><rect x="795" y="120" width="280" height="120" rx="14"/></g>
+  <g fill="#ccfbf1" font-family="Segoe UI,Arial" text-anchor="middle"><text x="140" y="160" font-size="21" font-weight="700">JSON scene</text><text x="140" y="193" font-size="14">последовательность op</text><text x="382" y="160" font-size="21" font-weight="700">SceneBuilder</text><text x="382" y="193" font-size="14">мм → координаты grid</text><text x="640" y="153" font-size="21" font-weight="700">HashSet voxels</text><text x="640" y="184" font-size="14">CSG · morphology</text><text x="640" y="207" font-size="14">TPMS · lattice</text><text x="935" y="153" font-size="21" font-weight="700">Экспорт</text><text x="935" y="184" font-size="14">greedy / classic STL</text><text x="935" y="207" font-size="14">binary / ASCII</text></g>
+  <g stroke="#2dd4bf" stroke-width="3" marker-end="url(#a)"><line x1="235" y1="180" x2="270" y2="180"/><line x1="485" y1="180" x2="520" y2="180"/><line x1="750" y1="180" x2="785" y2="180"/></g>
+  <text x="55" y="304" fill="#99f6e4" font-family="Segoe UI,Arial" font-size="16">Это бинарная occupancy-модель: SDF хранится неявно только во время rasterization; поверхность остаётся ступенчатой.</text>
+  <text x="55" y="334" fill="#5eead4" font-family="Segoe UI,Arial" font-size="16">Интерактивная часть: WinForms + SharpGL, Windows, .NET Framework 4.8, x86.</text>
+</svg>
