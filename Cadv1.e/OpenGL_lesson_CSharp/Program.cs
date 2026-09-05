@@ -13,6 +13,7 @@ namespace OpenGL_lesson_CSharp
             if (args != null && args.Any(a => string.Equals(a, "--self-test", StringComparison.OrdinalIgnoreCase)))
             {
                 VoxelDocumentSelfTest.Run();
+                VoxelManufacturing.SelfTest();
                 return;
             }
 
