@@ -8,5 +8,6 @@
     <ProjectReference Include="..\..\src\DCad.Core\DCad.Core.csproj" />
     <ProjectReference Include="..\..\src\DCad.Boolean.Manifold\DCad.Boolean.Manifold.csproj" />
     <ProjectReference Include="..\..\src\DCad.Language\DCad.Language.csproj" />
+    <ProjectReference Include="..\..\src\DCad.Fields\DCad.Fields.csproj" />
   </ItemGroup>
 </Project>
