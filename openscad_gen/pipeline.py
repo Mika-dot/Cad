@@ -5,7 +5,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+import numpy as np
+
 from .exporters import export_connector_scad, export_metrics_csv, export_scene_preview, export_summary_json
+from .field_exchange import export_dcad_field, linear_field_to_grid
 from .geometry import build_voxel_scene
 from .logging_utils import configure_logging
 from .optimizer import optimize_connector
@@ -70,6 +73,35 @@ def run_pipeline(scene_path: str | Path, output_root: str | Path | None = None, 
         export_scene_preview(run_dir / "final_scene_preview.scad", voxel_scene)
         if metrics:
             export_metrics_csv(run_dir / "metrics.csv", metrics)
+
+        density_grid = best_mask.astype(np.float32)
+        stress_grid = None
+        if fem_result.active_ids is not None and fem_result.connector_vm is not None:
+            stress_grid = linear_field_to_grid(
+                voxel_scene.grid.shape,
+                fem_result.active_ids,
+                fem_result.connector_vm,
+            )
+        if fem_result.active_ids is not None and fem_result.rho_phys is not None:
+            density_grid = linear_field_to_grid(
+                voxel_scene.grid.shape,
+                fem_result.active_ids,
+                fem_result.rho_phys,
+            )
+
+        export_dcad_field(
+            run_dir / "final_fields.npz",
+            voxel_scene,
+            density=density_grid,
+            stress=stress_grid,
+            field_linear_ids=fem_result.active_ids,
+            metadata={
+                "source": str(scene_path),
+                "kind": "topology_optimization_result",
+                "binary_connector_voxels": int(best_mask.sum()),
+            },
+        )
+
         summary = {
             "scene": str(scene_path),
             "config": scene.config.to_dict(),
@@ -79,6 +111,7 @@ def run_pipeline(scene_path: str | Path, output_root: str | Path | None = None, 
             "final_max_abs_vm": float(fem_result.abs_max_vm),
             "final_max_displacement": float(fem_result.max_displacement),
             "final_compliance": float(fem_result.compliance),
+            "dcad_field": "final_fields.npz",
             "frames": len(list(frames_dir.glob("*.png"))),
         }
         export_summary_json(run_dir / "summary.json", summary)
