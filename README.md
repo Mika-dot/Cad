@@ -2,7 +2,9 @@
 
 `OpenGL` — базовая ветка визуализации DCad. Раньше это был учебный SharpGL-пример: два захардкоженных куба, `GL_QUADS`, камера в обработчике `Resized` и управление WASD. Теперь ветка оформлена как **reusable CAD viewport**, который должен стать общей визуальной оболочкой для `VoxelСad`, `FEM_Voxel`, `V1-Experiment`, `V2-Experiment` и STL-инструментов.
 
-## Что изменено
+## CAD viewport layer
+
+Уже реализованы:
 
 - отдельный `Camera3D`: orbit / pan / zoom, perspective + orthographic, стандартные CAD-виды, `Fit`;
 - отдельная `Scene3D`: список объектов, selection, scene bounds, CPU ray picking;
@@ -14,10 +16,43 @@
 - scene tree + `PropertyGrid` для редактирования transform/color;
 - toolbar: Fit, Isometric, Front, Top, Right, projection, grid, lighting, render mode;
 - status bar с режимом камеры/рендера и selection;
-- SharpGL обновлён с `2.3.0.1` (2014) до `3.1.1`;
-- добавлен Windows CI.
+- SharpGL обновлён с `2.3.0.1` до `3.1.1`;
+- Windows CI.
 
-## Управление
+## Новое: ModernRenderer GPU backend experiment
+
+Добавлен второй renderer path:
+
+```text
+ModernRenderer/
+├── DCad.Renderer.csproj
+├── MeshData.cs
+├── ShaderProgram.cs
+├── ViewerWindow.cs
+└── Program.cs
+```
+
+Это .NET 8 + **OpenTK 4.9.4 / OpenGL 3.3 Core**. Он нужен не вместо текущего богатого CAD UI, а как prototype будущей GPU-части:
+
+- VAO / VBO / EBO;
+- indexed triangles;
+- GLSL vertex/fragment shaders;
+- per-vertex scalar values;
+- scalar heatmap;
+- normal-based lighting;
+- depth + culling;
+- orbit/zoom;
+- wireframe toggle.
+
+Запуск:
+
+```bash
+dotnet run --project ModernRenderer/DCad.Renderer.csproj
+```
+
+На 2026 год stable OpenTK 4.x остаётся более консервативным выбором для этого prototype: OpenTK 5 доступен как prerelease. Поэтому backend закреплён на `4.9.4`, а не на pre-release API.
+
+## Управление legacy/CAD viewport
 
 | Действие | Управление |
 |---|---|
@@ -33,23 +68,49 @@
 | Front / Back / Left / Right / Top / Bottom / Iso | `1..7` |
 | Deselect | `Esc` |
 | Focus selected | double click |
-| Local camera pan | `A/D`, `Q/E`, arrows |
 
-## Архитектура
+## Целевая архитектура
+
+Нельзя выбирать между «текущим SharpGL viewport» и «новым OpenTK viewer» как между двумя приложениями. Их надо скрестить по слоям:
 
 ```text
-SharpGLForm
-   │
-   ├── Camera3D              navigation + projection + screen ray
-   ├── Scene3D               objects + bounds + selection
-   │     └── SceneObject
-   │            └── MeshData
-   └── ViewportRenderer      grid / axes / shading / wireframe / x-ray
+DCad UI / tools
+      |
+      +-- Scene3D
+      +-- Camera3D
+      +-- selection / properties / gizmos
+      |
+      v
+IRenderBackend
+      |
+      +-- SharpGLCompatibilityBackend   <- текущий CAD viewport
+      +-- OpenTkGpuBackend              <- ModernRenderer
+             |
+             +-- VBO/EBO cache
+             +-- shaders
+             +-- ID framebuffer picking
+             +-- field visualization
 ```
 
-Форма теперь не должна знать, является объект воксельной моделью, STL, FEM mesh или polygon CSG. Она получает `SceneObject/MeshData`. Именно это позволяет постепенно объединять исторические ветки.
+То есть UI/scene logic сохраняется, а непосредственный GPU backend становится заменяемым.
 
-## Сборка
+## Geometry contract
+
+Renderer не должен знать, как была создана фигура:
+
+```text
+V2 triangle mesh --------+
+                         |
+Rendering-STL ------------+--> indexed MeshData --> renderer
+                         |
+VoxelCAD surface mesher --+
+                         |
+FEM density/stress -------+--> vertex/cell scalar attributes
+```
+
+Именно поэтому `MeshData` должен стать общим DTO: positions, normals, triangle indices и optional scalar/material/object IDs.
+
+## Сборка существующего CAD viewport
 
 ```powershell
 nuget restore OpenGL_lesson_CSharp\OpenGL_lesson_CSharp.sln
@@ -58,25 +119,23 @@ msbuild OpenGL_lesson_CSharp\OpenGL_lesson_CSharp.sln /m /p:Configuration=Releas
 
 Требуется Windows и .NET Framework 4.8.
 
-## Почему пока остаётся SharpGL compatibility rendering
-
-Задача этого этапа — сначала получить **единый интерфейс viewport/scene/camera**, который можно перенести в остальные ветки без их переписывания. Внутренний renderer пока способен работать через compatibility OpenGL, поэтому старые проекты DCad не ломаются.
-
-Следующий renderer backend должен заменить per-frame immediate submission на indexed GPU buffers + shaders. В современном OpenGL vertex data обычно хранится в VBO/VAO, а off-screen passes/picking/anti-aliasing строятся через framebuffer objects. Это будет backend-замена под теми же `Camera3D / Scene3D / MeshData`, а не очередное переписывание UI.
-
 ## Следующие этапы
 
-1. `MeshData` adapters для `VoxelСad`, polygon CSG и STL.
-2. GPU mesh cache: VBO / index buffers и shader pipeline.
-3. integer ID framebuffer picking вместо bounding-sphere picking.
-4. MSAA + resolve, silhouette/selection outline pass.
-5. section planes, clipping box, explode view.
-6. measurement tools: point-point, angle, radius, bounding dimensions.
-7. gizmo translate/rotate/scale + snapping.
-8. scene layers: geometry / FEM / temperature / stress / voxel fields.
-9. large-model chunking, frustum culling и LOD.
-10. в итоговом unified app — renderer abstraction, чтобы SharpGL можно было заменить на OpenTK/Silk.NET/Vulkan backend без изменения CAD kernels.
+1. общий `IRenderBackend`;
+2. adapters `MeshData` для V2, STL и VoxelCAD;
+3. persistent GPU mesh cache вместо upload каждый кадр;
+4. integer object/face ID framebuffer picking;
+5. silhouette selection outline pass;
+6. MSAA + resolve;
+7. clipping/section planes и clipping box;
+8. measurement tools: distance, angle, radius, dimensions;
+9. translate/rotate/scale gizmo + snapping;
+10. scene layers: geometry / FEM / temperature / stress / density;
+11. large-model chunks, frustum culling и LOD;
+12. offscreen screenshot/report renderer;
+13. voxel instancing/indirect draw для debug volume mode;
+14. PBR/environment lighting для нормального CAD viewport.
 
-## Техническая база
+## Роль ветки
 
-OpenGL 4.6 остаётся текущей спецификацией Khronos. VAO/VBO являются стандартным механизмом vertex specification, а framebuffer objects — стандартной основой off-screen rendering и multisample pipelines. SharpGL сам содержит Modern OpenGL samples с shaders и vertex buffers, поэтому промежуточная миграция возможна без немедленной смены всего UI stack.
+`OpenGL` становится **единственным rendering/view layer** будущего приложения. Ни V1, ни V2, ни FEM не должны иметь собственную долгоживущую систему камер, selection и визуальных режимов — они должны отдавать геометрию/fields этому модулю.
