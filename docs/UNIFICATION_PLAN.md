@@ -1,126 +1,187 @@
 # DCad unification plan
 
-Цель репозитория — не сохранить восемь независимых демонстраторов, а собрать их идеи в одно CAD/CAE-приложение. Ветки рассматриваются как prototypes модулей.
+Цель репозитория — собрать сильные части исторических веток в одно CAD/CAE-приложение, а не поддерживать набор несвязанных WinForms/SharpGL демонстраторов.
 
-## Что брать из каждой ветки
+Активная интеграционная ветка: **`Unified-CAD`**.
 
-| Ветка | Сильная часть | Куда переносить |
+## Что берём из каждой ветки
+
+| Ветка | Современная часть | Целевой модуль |
 |---|---|---|
-| `OpenGL` | viewport, camera, interaction, scene visualization | `DCad.Viewport` |
-| `VoxelСad` | sparse voxel/implicit CSG, TPMS/lattice, morphology | `DCad.Geometry.Voxel` |
-| `FEM_Voxel` | voxel FEM, SIMP/OC topology optimization | `DCad.Analysis` / `DCad.Optimization` |
-| `V1-Experiment` | contour extrusion, operation history, G-code, temperature field | `DCad.Geometry.Commands`, `DCad.Manufacturing`, `DCad.Fields` |
-| `V2-Experiment` | triangle/polygon representation and CSG experiments | `DCad.Geometry.Mesh` |
-| `Rendering-stl` | STL/application visualization ideas | `DCad.IO`, `DCad.Viewport.Adapters` |
-| `Function-Basket` | historical algorithms | test/reference archive; useful functions migrate with tests |
+| `Unified-CAD` | общий .NET 8 kernel API, DSL, robust polygon CSG, CLI, OpenTK app | интеграционная база |
+| `OpenGL` | Camera/Scene UX + `ModernRenderer` VBO/VAO/shaders/field scalar | `DCad.Viewport` |
+| `VoxelСad` | sparse voxel/implicit CSG, primitives, morphology, TPMS/lattice, greedy meshing | `DCad.Geometry.Voxel` |
+| `FEM_Voxel` | voxel FEM, SIMP/OC, density/stress fields, field exchange | `DCad.Analysis`, `DCad.Optimization` |
+| `V1-Experiment` | modern voxel engine, operation history, extrusion/G-code/temperature ideas | `DCad.Document`, `DCad.Manufacturing`, fields |
+| `V2-Experiment` | `ModernV2/Production`: indexed mesh, robust CSG, language and viewer | `DCad.Geometry.Mesh` |
+| `Rendering-stl` | `ModernStl`: STL validation/import/export | `DCad.IO` |
+| `Function-Basket` | `ModernGeometryLab`: deterministic geometry/CSG regressions | `DCad.Tests` |
 
 ## Target solution
 
 ```text
 DCad.sln
-  DCad.App                 desktop shell / docking / commands
-  DCad.Viewport            camera, scene, picking, render abstraction
-  DCad.Geometry.Core       vectors, transforms, bounds, IDs, operation graph
-  DCad.Geometry.Mesh       triangle meshes, mesh repair, polygon CSG
-  DCad.Geometry.Voxel      sparse voxels, SDF, TPMS, morphology
-  DCad.Analysis            FEM, thermal and result fields
-  DCad.Optimization        SIMP/topology/generative workflows
-  DCad.Manufacturing       slicing, G-code, print/process checks
-  DCad.IO                  STL/OBJ/PLY/3MF/VDB/project format
-  DCad.Tests               geometry/math/regression tests
+  DCad.App
+  DCad.Document
+  DCad.Language
+  DCad.Viewport
+  DCad.Geometry.Core
+  DCad.Geometry.Mesh
+  DCad.Geometry.Voxel
+  DCad.Analysis
+  DCad.Optimization
+  DCad.Manufacturing
+  DCad.IO
+  DCad.Tests
 ```
 
-## Главный принцип интеграции
+## Главный принцип
 
-Ни voxel engine, ни FEM, ни polygon CSG не должны напрямую рисовать OpenGL.
-
-Каждый kernel выдаёт данные через adapter:
+UI, renderer, geometry, analysis и IO разделяются интерфейсами.
 
 ```text
-VoxelModel ─────┐
-TriangleSolid ──┼──> SceneObject / MeshData / FieldLayer ──> Viewport
-FEM Result ─────┤
-STL/OBJ ────────┘
+.dcad / project
+      │
+Document + Operation Graph
+      │
+Geometry Kernel API
+  ┌───┼─────────────┐
+  │   │             │
+Mesh  Voxel/SDF     B-Rep
+  │   │             │
+  └───┴─────┬───────┘
+            │
+     Mesh / Field contracts
+      ┌─────┼──────────┐
+      │     │          │
+ Viewport   IO   FEM / Optimization
 ```
 
-Так renderer можно менять независимо от математики.
+Ни FEM, ни voxel engine, ни polygon CSG не должны напрямую владеть OpenGL/WinForms state.
 
-## Общая модель документа
+## Инварианты общей системы
 
-Вместо `save.txt` разных веток нужен operation/document model:
+- длина по умолчанию: mm;
+- сила: N;
+- stress / Young modulus: N/mm² (MPa);
+- geometry algorithms работают в `double`, если backend не требует другое;
+- tolerance policy централизована и зависит от масштаба;
+- solid mesh проходит topology validation;
+- замкнутый solid не имеет boundary/non-manifold edges;
+- geometry bugs превращаются в regression tests;
+- operation history сериализуема;
+- renderer принимает mesh/field packets, а не вызывает geometry code;
+- analysis fields имеют explicit origin/grid/unit metadata.
 
-```text
-Document
- ├─ Objects
- │   ├─ Geometry source
- │   ├─ Transform
- │   ├─ Appearance
- │   └─ Parameters
- ├─ Operation graph / history
- ├─ Analysis cases
- ├─ Result fields
- └─ Manufacturing jobs
-```
+## Migration status
 
-Команды `AddBox`, `Extrude`, `Boolean`, `Voxelize`, `Optimize`, `GenerateLattice` должны быть сериализуемыми. Undo/redo строится на command/history layer, а не на копировании всего мира.
-
-## Migration order
-
-### Phase 0 — foundation
-- [x] repository branch inventory
+### Phase 0 — inventory and research baseline
+- [x] branch inventory
 - [x] main README as project map
-- [x] reusable OpenGL camera/scene/renderer shell
-- [x] advanced VoxelCAD baseline
+- [x] VoxelCAD expanded beyond box-only occupancy
 - [x] FEM/topology optimization baseline
+- [x] modern viewport experiments
 
-### Phase 1 — common contracts
-- [ ] вынести math/transform/bounds из OpenGL в `Geometry.Core`
-- [ ] общий `IMeshSource` / `IFieldSource`
-- [ ] adapters из `VoxelСad`, V2 mesh, STL, FEM
-- [ ] единая система единиц: mm, N, MPa by default + explicit unit metadata
+### Phase 1 — common geometry foundation
+- [x] .NET 8 integration branch `Unified-CAD`
+- [x] double-precision vectors / triangles / AABB
+- [x] indexed `Mesh3d`
+- [x] mesh topology validator
+- [x] deterministic concave polygon triangulation
+- [x] deterministic point-in-solid (no RNG rays)
+- [x] replace legacy V2 boolean path with production Manifold adapter
+- [x] CSG regression tests
+- [x] basic modeling-kernel abstraction
+- [ ] exact/B-Rep adapter for STEP/NURBS-class geometry
 
-### Phase 2 — desktop CAD shell
-- [ ] document tree
-- [ ] property inspector
-- [ ] command palette / toolbar
-- [ ] undo/redo
+### Phase 2 — modeling language and document
+- [x] first `.dcad` parser/evaluator
+- [x] scalar parameters + explicit units
+- [x] primitives / transforms / union / difference / intersection
+- [ ] persistent AST / operation graph
+- [ ] stable object IDs and named selections
+- [ ] undo / redo
 - [ ] project save/load
-- [ ] transform gizmo + snapping
-- [ ] measurement and section tools
+- [ ] sketches + geometric constraints
+- [ ] extrude / revolve / sweep / loft
+- [ ] arrays, patterns, mirrors
 
-### Phase 3 — geometry convergence
-- [ ] mesh import/repair
-- [ ] mesh ↔ voxel/SDF conversion
-- [ ] robust boolean pipeline
-- [ ] SDF offsets/shell/blends
-- [ ] adaptive meshing
+### Phase 3 — viewport convergence
+- [x] reusable Camera/Scene UX in `OpenGL`
+- [x] VBO/VAO/index-buffer shader renderer in `OpenGL/ModernRenderer`
+- [x] OpenTK production viewer in `Unified-CAD`
+- [x] scalar/heatmap experiment in renderer branch
+- [ ] common `ScenePacket` / `FieldLayer` contracts
+- [ ] GPU ID picking
+- [ ] selection outline
+- [ ] gizmo + snapping
+- [ ] orthographic CAD views in unified viewer
+- [ ] clipping/section planes
+- [ ] measurements
+- [ ] large model chunking/culling/LOD
 
-### Phase 4 — CAE/generative
-- [ ] FEM cases displayed as viewport field layers
-- [ ] topology density preview in same viewport
-- [ ] density/stress → lattice/TPMS
-- [ ] parameter sweeps and compare variants
+### Phase 4 — voxel / field convergence
+- [x] VoxelCAD primitives, implicit rasterization, CSG and morphology
+- [x] TPMS/lattice experiments
+- [x] greedy mesh export
+- [x] FEM field exchange convention
+- [ ] common C# `IFieldSource`
+- [ ] mesh → voxel/SDF
+- [ ] voxel/SDF → mesh adapter into common `Mesh3d`
+- [ ] persistent narrow-band SDF
+- [ ] adaptive sparse bricks / VDB-class backend
+- [ ] Dual Contouring/QEF surface extraction
 
-### Phase 5 — manufacturing
-- [ ] slicing/G-code moved from V1 into separate service
-- [ ] minimum wall / printability checks
-- [ ] 3MF export and process metadata
+### Phase 5 — CAE / generative
+- [x] SIMP + Optimality Criteria
+- [x] filtering/projection/continuation
+- [x] sparse regular-grid FEM
+- [x] density field output
+- [x] shared mm/N/MPa convention documented
+- [ ] formal CAD→analysis request schema
+- [ ] loads/supports/materials stored in common document
+- [ ] stress/displacement/density rendered as field layers
+- [ ] result probing and legends
+- [ ] density/stress-driven lattice/TPMS
+- [ ] parameter sweeps and variant comparison
 
-### Phase 6 — renderer backend
-- [ ] VBO/indexed mesh cache
-- [ ] shader materials
-- [ ] FBO ID picking
-- [ ] MSAA
-- [ ] clipping/section pass
-- [ ] optional backend migration away from SharpGL
+### Phase 6 — IO and manufacturing
+- [x] modern STL toolkit experiment exists in `Rendering-stl`
+- [x] historical G-code generator preserved in V1
+- [ ] move STL/OBJ import/export into `DCad.IO`
+- [ ] mesh repair report on import
+- [ ] PLY / 3MF
+- [ ] STEP via B-Rep bridge
+- [ ] slicing and G-code as `DCad.Manufacturing`
+- [ ] printability / minimum-wall checks
+
+### Phase 7 — tests / robustness
+- [x] `Function-Basket` converted to `ModernGeometryLab`
+- [x] triangulation area/n−2 invariants
+- [x] CSG volume identities
+- [x] deterministic point classification tests
+- [x] manifold topology checks
+- [ ] triangle/triangle pathological corpus
+- [ ] coplanar/touching boolean corpus
+- [ ] property-based randomized geometry tests
+- [ ] fuzzing parsers/importers
+- [ ] performance benchmarks and large-model datasets
 
 ## What not to merge literally
 
-- `SharpGLForm` copies from each branch;
-- raw `worldX/worldY/worldZ` arrays;
-- branch-specific save files;
-- UI event handlers containing geometry algorithms;
-- FEM units mixed between metres/Pascal and millimetres/MPa;
-- per-voxel/per-triangle draw calls in application code.
+Не переносятся как архитектурная основа:
 
-Эти части являются историческим прототипом и заменяются общими contracts.
+- копии `SharpGLForm` из веток;
+- `worldX/worldY/worldZ` как глобальное состояние;
+- branch-specific `save.txt`;
+- UI event handlers, внутри которых живут CSG/FEM algorithms;
+- random ray casting и fixed magic epsilons;
+- mixed metre/Pascal vs millimetre/MPa units;
+- per-triangle / per-voxel immediate OpenGL submission;
+- бинарники и NuGet packages, закоммиченные в старые каталоги.
+
+Они сохраняются как история, но современная реализация строится вокруг общих contracts и regression tests.
+
+## Merge policy
+
+Старые ветки не должны механически сливаться в `main`. Сначала полезная подсистема получает современный isolated implementation + CI в своей ветке, затем интерфейс стабилизируется в `Unified-CAD`, и только после этого она переносится в итоговый application solution.
