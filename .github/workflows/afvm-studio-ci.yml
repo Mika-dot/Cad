@@ -15,7 +15,7 @@ jobs:
       - name: Decode exact source archive
         shell: pwsh
         run: |
-          $b64 = Get-Content .\ci\AFVM_Studio_VS.zip.b64 -Raw
+          $b64 = ((Get-Content .\ci\chunks\00.txt -Raw) + (Get-Content .\ci\chunks\01.txt -Raw) + (Get-Content .\ci\chunks\02.txt -Raw) + (Get-Content .\ci\chunks\03.txt -Raw)) -replace '\s',''
           [IO.File]::WriteAllBytes("AFVM_Studio_VS.zip", [Convert]::FromBase64String($b64))
           Expand-Archive .\AFVM_Studio_VS.zip -DestinationPath . -Force
       - name: Restore
@@ -25,4 +25,4 @@ jobs:
       - name: Unit tests
         run: dotnet test .\AFVM_Studio_VS\AFVM_Studio.sln -c Release --no-build --logger "console;verbosity=normal"
       - name: Publish Windows x64
-        run: dotnet publish .\AFVM_Studio_VS\src\AFVM.Studio\AFVM.Studio.csproj -c Release -r win-x64 --self-contained true --no-restore -o .\publish\AFVM_Studio_win-x64
+        run: dotnet publish .\AFVM_Studio_VS\src\AFVM.Studio\AFVM.Studio.csproj -c Release -r win-x64 --self-contained true -o .\publish\AFVM_Studio_win-x64
