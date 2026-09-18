@@ -55,7 +55,7 @@ public sealed class ViewerWindow : GameWindow
         base.OnRenderFrame(e); GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
         var eye = Eye(); var model = Matrix4.Identity; var view = Matrix4.LookAt(eye, Vector3.Zero, Vector3.UnitZ);
         var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(48f), Size.X / (float)Math.Max(1, Size.Y), 0.02f, 100f);
-        GL.PolygonMode(MaterialFace.FrontAndBack, _wireframe ? PolygonMode.Line : PolygonMode.Fill);
+        GL.PolygonMode(TriangleFace.FrontAndBack, _wireframe ? PolygonMode.Line : PolygonMode.Fill);
         GL.UseProgram(_meshProgram); SetMatrix(_meshProgram, "uModel", model); SetMatrix(_meshProgram, "uView", view); SetMatrix(_meshProgram, "uProjection", projection);
         GL.Uniform3(GL.GetUniformLocation(_meshProgram, "uEye"), eye); GL.Uniform3(GL.GetUniformLocation(_meshProgram, "uBaseColor"), _models[_active].color);
         GL.Uniform1(GL.GetUniformLocation(_meshProgram, "uHeatmap"), _heatmap ? 1 : 0); GL.BindVertexArray(_vaos[_active]);
@@ -63,7 +63,7 @@ public sealed class ViewerWindow : GameWindow
 
         if (_showGrid)
         {
-            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill); GL.Disable(EnableCap.DepthTest); GL.UseProgram(_lineProgram);
+            GL.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill); GL.Disable(EnableCap.DepthTest); GL.UseProgram(_lineProgram);
             var mvp = model * view * projection; SetMatrix(_lineProgram, "uMvp", mvp); GL.BindVertexArray(_gridVao);
             GL.DrawArrays(PrimitiveType.Lines, 0, _gridLines.Length / 4); GL.Enable(EnableCap.DepthTest);
         }
