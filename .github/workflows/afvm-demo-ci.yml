@@ -2,12 +2,7 @@ name: AFVM Demo CI
 on:
   push:
     branches: [ "Research-AFVM-Demo" ]
-    paths-ignore:
-      - "AFVM_Demo/ci-build.log"
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -19,18 +14,7 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Restore
         run: dotnet restore .\AFVM_Demo\AFVMDemo.sln
-      - name: Build with diagnostic capture
-        shell: pwsh
-        run: |
-          dotnet build .\AFVM_Demo\AFVMDemo.sln -c Release --no-restore *>&1 | Tee-Object -FilePath .\AFVM_Demo\ci-build.log
-          $code = $LASTEXITCODE
-          if ($code -ne 0) {
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .\AFVM_Demo\ci-build.log
-            git commit -m "ci: capture AFVM build log"
-            git push
-            exit $code
-          }
+      - name: Build
+        run: dotnet build .\AFVM_Demo\AFVMDemo.sln -c Release --no-restore
       - name: Numeric self-test
         run: dotnet run --project .\AFVM_Demo\src\AFVMDemo\AFVMDemo.csproj -c Release --no-build -- --self-test
