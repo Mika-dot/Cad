@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +18,15 @@ jobs:
         run: dotnet build .\AFVM_Demo\AFVMDemo.sln -c Release --no-restore
       - name: Numeric self-test
         run: dotnet run --project .\AFVM_Demo\src\AFVMDemo\AFVMDemo.csproj -c Release --no-build -- --self-test
+      - name: Publish self-contained Windows x64
+        run: dotnet publish .\AFVM_Demo\src\AFVMDemo\AFVMDemo.csproj -c Release -r win-x64 --self-contained true --no-restore -o .\AFVM_Demo\publish\win-x64
+      - name: Package published application
+        shell: pwsh
+        run: |
+          Copy-Item .\AFVM_Demo\README.md .\AFVM_Demo\publish\win-x64\README.md
+          Compress-Archive -Path .\AFVM_Demo\publish\win-x64\* -DestinationPath .\AFVM_Demo\AFVM_Demo_Windows_x64.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AFVM_Demo_Windows_x64
+          path: .\AFVM_Demo\AFVM_Demo_Windows_x64.zip
+          if-no-files-found: error

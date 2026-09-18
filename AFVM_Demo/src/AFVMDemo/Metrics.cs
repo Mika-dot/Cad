@@ -50,6 +50,13 @@ public static class Metrics
         if (RFunctions.Evaluate(-1, -1, ROperation.Difference).value <= 0)
             throw new InvalidOperationException("R-difference subtraction invariant failed.");
 
-        Console.WriteLine("SELF-TEST PASS: affine prolong/restrict and R-sign invariants.");
+        var clipBox = new Box3d(new(-1, -1, -1), new(1, 1, 1));
+        var clipLocal = new LocalLinearFunction(DVec3.Zero, 0.0, DVec3.UnitX);
+        if (!FunctionalVisualizationBuilder.TryPlanePolygon(clipBox, clipLocal, out var polygon) || polygon.Count != 4)
+            throw new InvalidOperationException("Local plane / voxel clipping invariant failed.");
+        if (polygon.Any(p => Math.Abs(p.X) > 1e-10))
+            throw new InvalidOperationException("Clipped local plane polygon is not on L(x)=0.");
+
+        Console.WriteLine("SELF-TEST PASS: affine prolong/restrict, R-signs and local-plane voxel clipping.");
     }
 }

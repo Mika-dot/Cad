@@ -21,7 +21,7 @@ public static class SurfaceExtractor
         (0,0,0),(1,0,0),(1,1,0),(0,1,0),(0,0,1),(1,0,1),(1,1,1),(0,1,1)
     ];
 
-    public static RenderMesh Extract(IField3d field, Box3d domain, int resolution)
+    public static RenderMesh Extract(IField3d field, Box3d domain, int resolution, Func<DVec3, double>? scalar = null)
     {
         if (resolution < 8) throw new ArgumentOutOfRangeException(nameof(resolution));
         var step = domain.Size / (resolution - 1);
@@ -42,12 +42,12 @@ public static class SurfaceExtractor
                 var o = CornerOffset[c]; int xi = x + o.x, yi = y + o.y, zi = z + o.z;
                 p[c] = Pos(xi, yi, zi); v[c] = values[Idx(xi, yi, zi)];
             }
-            foreach (var t in Tetrahedra) PolygoniseTetra(field, p, v, t, verts, indices);
+            foreach (var t in Tetrahedra) PolygoniseTetra(field, scalar, p, v, t, verts, indices);
         }
         return new(verts.ToArray(), indices.ToArray());
     }
 
-    private static void PolygoniseTetra(IField3d field, DVec3[] p, double[] v, int[] t, List<float> verts, List<uint> indices)
+    private static void PolygoniseTetra(IField3d field, Func<DVec3, double>? scalar, DVec3[] p, double[] v, int[] t, List<float> verts, List<uint> indices)
     {
         var inside = t.Where(i => v[i] <= 0).ToArray();
         var outside = t.Where(i => v[i] > 0).ToArray();
@@ -63,22 +63,22 @@ public static class SurfaceExtractor
 
         if (inside.Length == 1)
         {
-            int i = inside[0]; AddTriangle(field, Cross(i, outside[0]), Cross(i, outside[1]), Cross(i, outside[2]), verts, indices);
+            int i = inside[0]; AddTriangle(field, scalar, Cross(i, outside[0]), Cross(i, outside[1]), Cross(i, outside[2]), verts, indices);
         }
         else if (inside.Length == 3)
         {
-            int o = outside[0]; AddTriangle(field, Cross(o, inside[0]), Cross(o, inside[2]), Cross(o, inside[1]), verts, indices);
+            int o = outside[0]; AddTriangle(field, scalar, Cross(o, inside[0]), Cross(o, inside[2]), Cross(o, inside[1]), verts, indices);
         }
         else
         {
             int i0 = inside[0], i1 = inside[1], o0 = outside[0], o1 = outside[1];
             var p00 = Cross(i0, o0); var p01 = Cross(i0, o1); var p10 = Cross(i1, o0); var p11 = Cross(i1, o1);
-            AddTriangle(field, p00, p10, p11, verts, indices);
-            AddTriangle(field, p00, p11, p01, verts, indices);
+            AddTriangle(field, scalar, p00, p10, p11, verts, indices);
+            AddTriangle(field, scalar, p00, p11, p01, verts, indices);
         }
     }
 
-    private static void AddTriangle(IField3d field, DVec3 a, DVec3 b, DVec3 c, List<float> verts, List<uint> indices)
+    private static void AddTriangle(IField3d field, Func<DVec3, double>? scalar, DVec3 a, DVec3 b, DVec3 c, List<float> verts, List<uint> indices)
     {
         var face = DVec3.Cross(b - a, c - a).Normalized();
         var mid = (a + b + c) / 3.0;
@@ -94,7 +94,8 @@ public static class SurfaceExtractor
             if (n.LengthSquared < 1e-20) n = face;
             verts.Add((float)q.X); verts.Add((float)q.Y); verts.Add((float)q.Z);
             verts.Add((float)n.X); verts.Add((float)n.Y); verts.Add((float)n.Z);
-            verts.Add((float)Math.Clamp(0.5 + 0.5 * n.Z, 0, 1));
+            double sv = scalar is null ? 0.0 : scalar(q);
+            verts.Add((float)Math.Clamp(sv, 0.0, 1.0));
         }
     }
 }
