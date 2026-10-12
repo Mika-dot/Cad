@@ -37,7 +37,7 @@ internal sealed class TwoSphereField
         double cx=10+station*12,cy=((lateral/3)-1)*7.5,cz=((lateral%3)-1)*7.5;
         const double sx=14, sy=7.5;
         var s=Math.Clamp(x/Length,0,1);
-        var sin=Math.Sin(Math.PI*s),cos=Math.Cos(Math.PI*s);
+        double sin=Math.Sin(Math.PI*s),cos=Math.Cos(Math.PI*s);
         var fade=sin*sin;
         var df=(x>=0 && x<=Length)?2*sin*cos*Math.PI/Length:0;
         double dx=(x-cx)/(sx*sx),dy=(y-cy)/(sy*sy),dz=(z-cz)/(sy*sy);
