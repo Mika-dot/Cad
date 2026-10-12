@@ -102,7 +102,11 @@ public sealed class FunctionalVoxelModel
         return accumulated;
     }
 
-    public EncodedMImages EncodeRgb24() => EncodedMImages.Encode(Grid, _channels);
+    /// <summary>Fixed sign-normalized RGB24 mapping used in published M-images.</summary>
+    public EncodedMImages EncodeRgb24() => EncodedMImages.EncodeCanonical(Grid, _channels);
+
+    /// <summary>Optional non-canonical image-dependent range calibration.</summary>
+    public EncodedMImages EncodeRgb24Calibrated() => EncodedMImages.EncodeCalibrated(Grid, _channels);
 
     /// <summary>
     /// Perform R algebra solely on the stored local hyperplanes. This does not
