@@ -213,8 +213,8 @@ internal sealed class HexFem
         double maxDisp=0;
         for(int i=0;i<=_nx;i++)for(int j=0;j<=_ny;j++)for(int k=0;k<=_nz;k++)
         {
-            var x=_x0+i*_hx;var y=_y0+j*_hy;var z=_z0+k*_hz;
-            if(Evaluate(x,y,z)<0)continue;
+            var x=_x0+i*_hx;var y=_y0+j*_hy;var coordinateZ=_z0+k*_hz;
+            if(Evaluate(x,y,coordinateZ)<0)continue;
             var id=Node(i,j,k)*3;
             maxDisp=Math.Max(maxDisp,Math.Sqrt(u[id]*u[id]+u[id+1]*u[id+1]+u[id+2]*u[id+2]));
         }
