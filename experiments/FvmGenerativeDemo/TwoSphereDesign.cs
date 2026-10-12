@@ -540,6 +540,10 @@ internal static class TwoSphereDesign
             // Gather facets first; propagate a consistent edge winding over the
             // shared topological mesh, then orient every connected shell outward.
             var triangles=new List<(V A,V B,V C)>();
+            // Cache each crossing by global grid-edge node IDs. Computing the
+            // same edge in opposite tetrahedra otherwise changes the last
+            // floating-point bits and can break STL vertex identity.
+            var intersectionVertices=new Dictionary<(int,int),V>();
             void Triangle(V a,V b,V c)
             {
                 if(Dot(Cross(b-a,c-a),Cross(b-a,c-a))<1e-8)return;
@@ -565,9 +569,17 @@ internal static class TwoSphereDesign
                     if(inside.Length==0||inside.Length==4)continue;
                     V Edge(int a,int b)
                     {
+                        int Global(int n)=>
+                            ((i+offsets[n][0])*(ny+1)+(j+offsets[n][1]))*(nz+1)
+                            +(k+offsets[n][2]);
+                        if(Global(a)>Global(b))(a,b)=(b,a);
+                        var key=(Global(a),Global(b));
+                        if(intersectionVertices.TryGetValue(key,out var cached))return cached;
                         var d=sign[a]-sign[b];
                         var t=Math.Abs(d)<1e-14?.5:Math.Clamp(sign[a]/d,0,1);
-                        return point[a]+(point[b]-point[a])*t;
+                        var vertex=point[a]+(point[b]-point[a])*t;
+                        intersectionVertices.Add(key,vertex);
+                        return vertex;
                     }
                     if(inside.Length==1)
                     {
