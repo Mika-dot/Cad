@@ -23,6 +23,16 @@ public sealed class MainForm : Form
     {
         Width = 232, Minimum = .5m, Maximum = 100, DecimalPlaces = 1, Increment = .5m, Value = 3
     };
+    private readonly NumericUpDown _alpha = new()
+    {
+        Width = 232, Minimum = -.90m, Maximum = .90m,
+        DecimalPlaces = 2, Increment = .05m, Value = 0
+    };
+    private readonly NumericUpDown _integralInitial = new()
+    {
+        Width = 232, Minimum = -10000, Maximum = 10000,
+        DecimalPlaces = 3, Increment = .01m, Value = -.01m
+    };
     private readonly Button _build = new() { Text = "Построить / рассчитать", Width = 232, Height = 35 };
     private readonly Button _saveObj = new() { Text = "Экспорт OBJ (3D)", Width = 232, Height = 30, Enabled = false };
     private readonly Button _saveCsv = new() { Text = "Экспорт CSV (срез)", Width = 232, Height = 30, Enabled = false };
@@ -110,6 +120,10 @@ public sealed class MainForm : Form
         });
         _fieldMode.SelectedIndex = 0;
         left.Controls.Add(_fieldMode);
+        left.Controls.Add(Caption("Параметр R-алгебры α"));
+        left.Controls.Add(_alpha);
+        left.Controls.Add(Caption("Начальное значение ∫Fdx"));
+        left.Controls.Add(_integralInitial);
         left.Controls.Add(VerticalGap(6));
         left.Controls.Add(_build);
         left.Controls.Add(VerticalGap(2));
@@ -206,7 +220,9 @@ public sealed class MainForm : Form
         (FieldView)_fieldMode.SelectedIndex,
         (double)_radius.Value,
         (double)_secondary.Value,
-        int.Parse(_resolution.SelectedItem!.ToString()!, CultureInfo.InvariantCulture));
+        int.Parse(_resolution.SelectedItem!.ToString()!, CultureInfo.InvariantCulture),
+        (double)_alpha.Value,
+        (double)_integralInitial.Value);
 
     private async Task RebuildAsync()
     {
@@ -305,6 +321,8 @@ public sealed class MainForm : Form
         {
             $"Фигура: {scene.Settings.Shape}",
             $"Поле: {scene.Settings.View}",
+            $"R-alpha: {N(scene.Settings.RAlpha)}",
+            $"Интеграл: C0={N(scene.Settings.IntegralInitialValue)}",
             $"Сетка: {g.Count(0)} × {g.Count(1)} × {g.Count(2)}",
             $"Шаг: {N(g.Step(0))} мм",
             $"Каналов (double): {scene.Model.ChannelCount}",
