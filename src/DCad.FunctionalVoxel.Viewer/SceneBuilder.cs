@@ -29,7 +29,9 @@ public sealed record SceneSettings(
     FieldView View = FieldView.Original,
     double Radius = 10,
     double SecondaryRadius = 3,
-    int Resolution = 32);
+    int Resolution = 32,
+    double RAlpha = 0,
+    double IntegralInitialValue = -.01);
 
 public sealed record SceneResult(
     SceneSettings Settings,
@@ -59,6 +61,10 @@ public static class SceneBuilder
         if (settings.Resolution < 12 || settings.Resolution > 80)
             throw new ArgumentOutOfRangeException(nameof(settings),
                 "Grid resolution must be between 12 and 80.");
+        if (!double.IsFinite(settings.RAlpha) || settings.RAlpha <= -1 || settings.RAlpha >= 1)
+            throw new ArgumentOutOfRangeException(nameof(settings), "R-alpha must be in (-1,1).");
+        if (!double.IsFinite(settings.IntegralInitialValue))
+            throw new ArgumentOutOfRangeException(nameof(settings), "Integral's Cauchy value must be finite.");
 
         double extent = 1.5 * settings.Radius;
         var n = settings.Resolution;
@@ -83,17 +89,17 @@ public static class SceneBuilder
                     .Combine(
                         Sample(FunctionalField.CylinderZ(.19 * settings.SecondaryRadius, 0,
                             settings.SecondaryRadius, -2 * settings.Radius, 2 * settings.Radius)),
-                        ROperation.Difference),
+                        ROperation.Difference, settings.RAlpha),
             ShapeKind.TwoSpheresUnion =>
                 Sample(FunctionalField.Sphere(-.42 * settings.Radius, 0, 0, .8 * settings.Radius))
                     .Combine(
                         Sample(FunctionalField.Sphere(.42 * settings.Radius, 0, 0, .8 * settings.Radius)),
-                        ROperation.Union),
+                        ROperation.Union, settings.RAlpha),
             ShapeKind.TwoSpheresIntersection =>
                 Sample(FunctionalField.Sphere(-.42 * settings.Radius, 0, 0, .8 * settings.Radius))
                     .Combine(
                         Sample(FunctionalField.Sphere(.42 * settings.Radius, 0, 0, .8 * settings.Radius)),
-                        ROperation.Intersection),
+                        ROperation.Intersection, settings.RAlpha),
             _ => throw new ArgumentOutOfRangeException(nameof(settings), "Unknown shape.")
         };
 
@@ -103,9 +109,7 @@ public static class SceneBuilder
             FieldView.DerivativeX => result.Derivative(0),
             FieldView.DerivativeY => result.Derivative(1),
             FieldView.DerivativeZ => result.Derivative(2),
-            // A nonzero Cauchy value prevents the iso-surface from coinciding
-            // with all sample centres on the first X plane.
-            FieldView.IntegralX => result.Integrate(0, _ => -.01),
+            FieldView.IntegralX => result.Integrate(0, _ => settings.IntegralInitialValue),
             _ => throw new ArgumentOutOfRangeException(nameof(settings), "Unknown field operation.")
         };
 
