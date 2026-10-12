@@ -370,10 +370,12 @@ public sealed class MainForm : Form
     private void SavePng()
     {
         if (_scene is null) return;
+        var channelName = _channel.SelectedIndex == 0
+            ? "F" : $"M{_channel.SelectedIndex - 1}";
         using var dialog = new SaveFileDialog
         {
             Filter = "PNG (*.png)|*.png",
-            FileName = $"functional_voxel_M{_channel.SelectedIndex - 1}_Z{_z.Value}.png"
+            FileName = $"functional_voxel_{channelName}_Z{_z.Value}.png"
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
