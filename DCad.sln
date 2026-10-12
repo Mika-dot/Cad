@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DCad.FunctionalVoxel", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DCad.FunctionalVoxel.Tests", "tests\DCad.FunctionalVoxel.Tests\DCad.FunctionalVoxel.Tests.csproj", "{DA6FD0E3-09A0-410D-8CBD-30C91B9E49A8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DCad.FunctionalVoxel.Viewer", "src\DCad.FunctionalVoxel.Viewer\DCad.FunctionalVoxel.Viewer.csproj", "{CE327E02-9944-4A0D-9E69-60AE533C2424}"
+EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
         Debug|Any CPU = Debug|Any CPU
@@ -56,5 +58,9 @@ Global
         {DA6FD0E3-09A0-410D-8CBD-30C91B9E49A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
         {DA6FD0E3-09A0-410D-8CBD-30C91B9E49A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
         {DA6FD0E3-09A0-410D-8CBD-30C91B9E49A8}.Release|Any CPU.Build.0 = Release|Any CPU
+        {CE327E02-9944-4A0D-9E69-60AE533C2424}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {CE327E02-9944-4A0D-9E69-60AE533C2424}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {CE327E02-9944-4A0D-9E69-60AE533C2424}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {CE327E02-9944-4A0D-9E69-60AE533C2424}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection
 EndGlobal
