@@ -546,7 +546,7 @@ internal static class TwoSphereDesign
             var intersectionVertices=new Dictionary<(int,int),V>();
             void Triangle(V a,V b,V c)
             {
-                if(Dot(Cross(b-a,c-a),Cross(b-a,c-a))<1e-8)return;
+                if(Dot(Cross(b-a,c-a),Cross(b-a,c-a))<1e-26)return;
                 triangles.Add((a,b,c));
             }
             var offsets=new[]{new[]{0,0,0},new[]{1,0,0},new[]{1,1,0},new[]{0,1,0},
