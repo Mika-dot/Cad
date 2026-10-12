@@ -1,0 +1,27 @@
+name: Functional voxel kernel CI
+
+on:
+  push:
+    branches: [feature/functional-voxel-kernel]
+  pull_request:
+    paths:
+      - 'src/DCad.FunctionalVoxel/**'
+      - 'tests/DCad.FunctionalVoxel.Tests/**'
+      - 'DCad.sln'
+
+jobs:
+  functional-voxel-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build standalone scientific kernel
+        run: dotnet build src/DCad.FunctionalVoxel/DCad.FunctionalVoxel.csproj -c Release --warnaserror
+      - name: Execute numerical kernel tests
+        run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release --logger "console;verbosity=normal"
