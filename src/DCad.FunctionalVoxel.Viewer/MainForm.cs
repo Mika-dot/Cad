@@ -37,6 +37,11 @@ public sealed class MainForm : Form
     private readonly Button _saveObj = new() { Text = "Экспорт OBJ (3D)", Width = 232, Height = 30, Enabled = false };
     private readonly Button _saveCsv = new() { Text = "Экспорт CSV (срез)", Width = 232, Height = 30, Enabled = false };
     private readonly Button _savePng = new() { Text = "Экспорт PNG (M-образ)", Width = 232, Height = 30, Enabled = false };
+    private readonly CheckBox _showScientificRgb = new()
+    {
+        Text = "Исходный RGB24 М-образ", Width = 235,
+        Height = 28, Checked = true
+    };
     private readonly Viewport3D _viewport = new() { Dock = DockStyle.Fill };
     private readonly SliceView _slice = new() { Dock = DockStyle.Fill };
     private readonly ComboBox _channel = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -137,6 +142,7 @@ public sealed class MainForm : Form
             _viewport.Invalidate();
         };
         left.Controls.Add(wireframe);
+        left.Controls.Add(_showScientificRgb);
         var cameraButton = new Button { Text = "Сброс вида", Width = 232, Height = 30 };
         cameraButton.Click += (_, _) => _viewport.ResetCamera();
         left.Controls.Add(cameraButton);
@@ -196,6 +202,8 @@ public sealed class MainForm : Form
             UpdateSliceLabel();
         };
         _channel.SelectedIndexChanged += (_, _) => _slice.SetChannel(_channel.SelectedIndex - 1);
+        _showScientificRgb.CheckedChanged += (_, _) => _slice.RawRgb24 = _showScientificRgb.Checked;
+        _slice.RawRgb24 = _showScientificRgb.Checked;
         _build.Click += async (_, _) => await RebuildAsync();
         _saveObj.Click += (_, _) => SaveObj();
         _saveCsv.Click += (_, _) => SaveCsv();
@@ -243,7 +251,7 @@ public sealed class MainForm : Form
             if (IsDisposed || Disposing) return;
             _scene = scene;
             _viewport.SetMesh(scene.Mesh);
-            _slice.SetModel(scene.Model);
+            _slice.SetModel(scene.Model, scene.Packed);
             _z.Minimum = 0;
             _z.Maximum = scene.Model.Grid.Count(2) - 1;
             _z.Value = _slice.SliceIndex;
