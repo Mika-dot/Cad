@@ -1,4 +1,4 @@
-name: Sphere assembly — console M-images
+name: Sphere assembly - four M-images per Z-slice
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-verify:
+  verify:
     strategy:
       fail-fast: false
       matrix:
@@ -18,18 +18,41 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Build
+      - name: Build single-class console app
         run: dotnet build SphereAssembly.csproj -c Release --warnaserror
-      - name: Verify scientific arithmetic
-        run: dotnet run --project SphereAssembly.csproj -c Release --no-build -- --check
-      - name: Create all sphere and circle M-images
-        run: dotnet run --project SphereAssembly.csproj -c Release --no-build -- --size 7 --no-color --no-table
-      - name: Verify BMP output count
-        run: python -c "from pathlib import Path; a=list(Path('output').glob('*.bmp')); print('BMP count=',len(a)); assert len(a)==39, 'Expected 4 circle images + 5*7 sphere slices'; assert all(p.read_bytes()[:2] == b'BM' for p in a)"
-      - name: Upload ready-to-open BMP pictures
+      - name: Calculate sphere and draw four maps per slice
+        run: dotnet run --project SphereAssembly.csproj -c Release --no-build
+      - name: Independently verify BMP count and physical RGB pixels
+        shell: python
+        run: |
+          import struct
+          from pathlib import Path
+          files = list(Path("output").glob("*.bmp"))
+          assert len(files) == 28, f"Expected 4x7=28 BMP files, got {len(files)}"
+          assert all(x.read_bytes()[:2] == b"BM" for x in files)
+          img = Path("output/Z04_M0.bmp").read_bytes()  # z=+1
+          width, height = struct.unpack_from("<ii", img, 18)
+          assert (width, height) == (7, 7)
+          def encoded(x,y,z):
+              f = 9-x*x-y*y-z*z
+              dx = -2*x
+              dy = -2*y
+              a0=-dx
+              a1=-dy
+              a2=1
+              a3=dx*x+dy*y-f
+              norm=(a0*a0+a1*a1+a2*a2+a3*a3)**.5
+              return int((a0/norm+1)*16777215/2 + .5)
+          # x=2 is column 5, y=1 is row 4 (BMP rows start at bottom).
+          offset=54+4*24+5*3
+          blue,green,red=img[offset:offset+3]
+          rgb=(red<<16)|(green<<8)|blue
+          assert abs(rgb-encoded(2,1,1)) <= 1, (rgb, encoded(2,1,1))
+          print("CHECK_PASS: 28 BMP; sample M0 RGB matches independent math")
+      - name: Upload BMP maps
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: sphere-assembly-M-images-BMP
+          name: sphere-assembly-4-M-images-per-Z
           path: output/*.bmp
           if-no-files-found: error
