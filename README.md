@@ -1,5 +1,13 @@
 # DCad — Unified-CAD
 
+> **Исследовательская ветка: объединение ФВМ + FEM + генеративного проектирования.**
+>
+> - **[Краткая точка входа для нового чата](docs/FVM_GENERATIVE_HANDOFF.md)** — исходные ветки, точное состояние, следующий шаг P0.
+> - **[Полный научно-технический план](docs/FVM_GENERATIVE_MECHANICS_MASTERPLAN.md)** — математическая постановка, 5 М-образов, механика, R-функции, shape sensitivities, данные C#↔Python, разработка, тесты и матрица новизны.
+>
+> На момент создания этих документов **новый объединённый FEM/ФВ-оптимизатор ещё не реализован**. Существующий код ниже исторически описывает базовую ветку Unified-CAD, из которой происходят некоторые компоненты. Рабочие исходники C# ФВМ находятся в этой ветке, Python FEM — в ветке [FEM_Voxel](https://github.com/Mika-dot/Cad/tree/FEM_Voxel).
+
+
 [![Unified CAD CI](https://github.com/Mika-dot/Cad/actions/workflows/unified-cad-ci.yml/badge.svg?branch=Unified-CAD)](https://github.com/Mika-dot/Cad/actions/workflows/unified-cad-ci.yml)
 
 `Unified-CAD` — интеграционная ветка репозитория. Здесь собран исполняемый маршрут от текстовой модели до проверенной треугольной сетки, OBJ и окна OpenGL.
