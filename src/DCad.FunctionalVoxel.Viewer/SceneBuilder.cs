@@ -36,6 +36,7 @@ public sealed record SceneResult(
     FunctionalVoxelModel Model,
     Mesh3d? Mesh,
     MeshValidationReport? MeshAudit,
+    EncodedMImages Packed,
     MImageQuantizationReport Quantization,
     double PositiveVoxelVolume);
 
@@ -108,8 +109,9 @@ public static class SceneBuilder
         // Iso-surface is only an output for display; no independent raster CSG.
         var mesh = FunctionalIsoSurface.Extract(result);
         var audit = mesh is null ? null : MeshValidator.Validate(mesh);
-        var quant = result.EncodeRgb24().CompareWith(result);
-        return new SceneResult(settings, result, mesh, audit, quant, result.PositiveRegionMeasure());
+        var packed = result.EncodeRgb24();
+        var quant = packed.CompareWith(result);
+        return new SceneResult(settings, result, mesh, audit, packed, quant, result.PositiveRegionMeasure());
     }
 }
 
