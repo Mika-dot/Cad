@@ -34,13 +34,13 @@ internal sealed class TwoSphereField
         out double bx,out double by,out double bz)
     {
         var station=i/9; var lateral=i%9;
-        var cx=10+station*12,cy=((lateral/3)-1)*7.5,cz=((lateral%3)-1)*7.5;
+        double cx=10+station*12,cy=((lateral/3)-1)*7.5,cz=((lateral%3)-1)*7.5;
         const double sx=14, sy=7.5;
         var s=Math.Clamp(x/Length,0,1);
         var sin=Math.Sin(Math.PI*s),cos=Math.Cos(Math.PI*s);
         var fade=sin*sin;
         var df=(x>=0 && x<=Length)?2*sin*cos*Math.PI/Length:0;
-        var dx=(x-cx)/(sx*sx),dy=(y-cy)/(sy*sy),dz=(z-cz)/(sy*sy);
+        double dx=(x-cx)/(sx*sx),dy=(y-cy)/(sy*sy),dz=(z-cz)/(sy*sy);
         var g=Math.Exp(-.5*((x-cx)*dx+(y-cy)*dy+(z-cz)*dz));
         var value=fade*g;
         bx=(df-fade*dx)*g;by=-value*dy;bz=-value*dz;
@@ -107,7 +107,7 @@ internal sealed class TwoSphereField
             var a=Grid.Centre(v);
             var x=a[0];var y=a[1];var z=a[2];
             var f=Factor(x,y,z);
-            var fx=(Factor(x+h,y,z)-Factor(x-h,y,z))/(2*h);
+            double fx=(Factor(x+h,y,z)-Factor(x-h,y,z))/(2*h);
             var fy=(Factor(x,y+h,z)-Factor(x,y-h,z))/(2*h);
             var fz=(Factor(x,y,z+h)-Factor(x,y,z-h))/(2*h);
             for(int i=0;i<ParameterCount;i++)
