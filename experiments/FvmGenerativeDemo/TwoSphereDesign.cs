@@ -28,11 +28,13 @@ internal sealed class TwoSphereField
         else
         {
             var (lo,hi)=scene.Bounds(scene.MaxRadius*.75);
-            var step=scene.MinRadius*.40;
+            // Rotated / unequal spheres require a finer five-M lattice:
+            // coarse first-order reconstruction can understate FEM stresses.
+            var step=scene.MinRadius*.30;
             var counts=new int[3];var sizes=new double[3];
             for(int d=0;d<3;d++)
             {
-                counts[d]=Math.Clamp((int)Math.Ceiling((hi[d]-lo[d])/step),4,55);
+                counts[d]=Math.Clamp((int)Math.Ceiling((hi[d]-lo[d])/step),4,70);
                 sizes[d]=(hi[d]-lo[d])/counts[d];
             }
             Grid=new FunctionalGrid(lo,sizes,counts);
@@ -284,6 +286,8 @@ internal static class TwoSphereDesign
             Connected(s.Model,scene);
         var current=Analyze(new double[TwoSphereField.ParameterCount]);
         Ensure(Feasible(current),"Initial 3D bridge must be mechanically feasible and connected.");
+        Ensure(Feasible(Analyze(current.P,false)),
+            "Initial analytic F must also satisfy stress/displacement limits.");
         var start=current;
         var csv=new List<string>{"iteration,volume_mm3,mass_kg,vm_max_mpa,u_max_mm,compliance_Nmm,reaction_x_N,reaction_y_N,residual,accepted_step_mm,active_gradient_channels"};
         void Store(int iter,State s,double step,int active)
@@ -357,6 +361,15 @@ internal static class TwoSphereDesign
                     if(Feasible(candidate)&&candidate.Mechanics.VolumeMm3<
                         current.Mechanics.VolumeMm3-.05)
                     {
+                        // The M interpolation must not create a false
+                        // mechanical PASS: reject designs for which the same
+                        // FEM solved on direct F violates the constraints.
+                        var directCandidate=Analyze(p,false);
+                        if(!Feasible(directCandidate))
+                        {
+                            Console.WriteLine("REJECT: direct analytic F FEM violates limits.");
+                            continue;
+                        }
                         current=candidate;found=true;accepted++;
                         Store(iter,current,step,objectiveGradient.Count(v=>Math.Abs(v)>1e-6));
                         break;
@@ -374,6 +387,8 @@ internal static class TwoSphereDesign
         Ensure(current.Mechanics.VolumeMm3<start.Mechanics.VolumeMm3,
             "Final material is lighter than initial bridge.");
         Ensure(Feasible(current),"Final 3D design must retain both anchors and constraints.");
+        Ensure(Feasible(Analyze(current.P,false)),
+            "Final direct analytic F FEM must independently satisfy stress and displacement limits.");
         Ensure(current.Model.ChannelCount==5,"Geometry has exactly five M-images");
         for(int id=0;id<current.Model.VoxelCount;id++)
         {
