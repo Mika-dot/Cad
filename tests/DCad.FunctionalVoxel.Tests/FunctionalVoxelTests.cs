@@ -242,6 +242,27 @@ public sealed class FunctionalVoxelTests
     }
 
     [Fact]
+    public void MarchingTetrahedraProducesClosedConsistentlyOrientedSphereMesh()
+    {
+        var grid = CubicGrid(24, .125);
+        var sphere = FunctionalVoxelModel.Sample(FunctionalField.Sphere(0, 0, 0, 1), grid);
+        var mesh = FunctionalIsoSurface.Extract(sphere);
+        Assert.NotNull(mesh);
+        var report = DCad.Core.MeshValidator.Validate(mesh!);
+        Assert.True(report.IsClosedOrientedManifold,
+            $"Degenerate={report.DegenerateTriangles}, boundary={report.BoundaryEdges}, nonmanifold={report.NonManifoldEdges}, winding={report.InconsistentWindingEdges}");
+        Assert.InRange(Math.Abs(mesh!.SurfaceArea() - 4 * Math.PI), 0, 1.0);
+        Assert.InRange(Math.Abs(mesh.SignedVolume() - 4 * Math.PI / 3), 0, .4);
+    }
+
+    [Fact]
+    public void IsoSurfaceReturnsNullForFieldWithNoZeroCrossings()
+    {
+        var model = FunctionalVoxelModel.Sample(FunctionalField.Constant(3, 5), CubicGrid());
+        Assert.Null(FunctionalIsoSurface.Extract(model));
+    }
+
+    [Fact]
     public void GridsRejectInvalidGeometryAndComposition()
     {
         Assert.Throws<ArgumentException>(() =>
