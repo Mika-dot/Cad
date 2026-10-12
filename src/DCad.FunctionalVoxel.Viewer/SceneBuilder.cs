@@ -102,7 +102,9 @@ public static class SceneBuilder
             FieldView.DerivativeX => result.Derivative(0),
             FieldView.DerivativeY => result.Derivative(1),
             FieldView.DerivativeZ => result.Derivative(2),
-            FieldView.IntegralX => result.Integrate(0, _ => 0),
+            // A nonzero Cauchy value prevents the iso-surface from coinciding
+            // with all sample centres on the first X plane.
+            FieldView.IntegralX => result.Integrate(0, _ => -.01),
             _ => throw new ArgumentOutOfRangeException(nameof(settings), "Unknown field operation.")
         };
 
