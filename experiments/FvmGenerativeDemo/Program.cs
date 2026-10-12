@@ -84,6 +84,13 @@ internal static class Program
     private static (FemResults Result,FunctionalVoxelModel Model) Analyze(double[] p, bool useM=true)
     {
         var (model,analytic)=Geometry(p);
+        // The loaded and supported interface patch is mandatory material.
+        // Check the ACTUAL reconstructed five-M geometry, not only analytic F.
+        foreach(var endX in new[]{0.0,Length})
+            foreach(var yy in new[]{-4.0,0.0,4.0})
+                foreach(var zz in new[]{-4.0,0.0,4.0})
+                    if(model.Approximate(new[]{endX,yy,zz})<=0)
+                        throw new InvalidOperationException("Mandatory load/support interface was removed.");
         var solver=new HexFem(Nx,Ny,Nz,0,-12,-12,Length/Nx,24.0/Ny,24.0/Nz,
             Young,Poisson,analytic,useM?model:null,LoadN,4.1);
         var result=solver.Solve();
