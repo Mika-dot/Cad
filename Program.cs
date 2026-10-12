@@ -3,7 +3,7 @@ using System.Text;
 
 // Этот класс получает формулу фигуры и шаг пикселя (в миллиметрах).
 // На одном Z-срезе он вычисляет четыре цвета для каждой точки (X, Y).
-class FunctionPixels
+public class FunctionPixels
 {
     private readonly Func<double, double, double, double> formula;
     private readonly double step;
