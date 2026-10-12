@@ -28,6 +28,10 @@ jobs:
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --self-test --out experiments/FvmGenerativeDemo/output
       - name: Run default three-step shape optimization and write BMP evidence
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --iterations 3 --out experiments/FvmGenerativeDemo/output/three-steps
+      - name: Verify free-form two-sphere 3D FEM and adjoint shape updates
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --two-spheres --self-test --iterations 3 --out experiments/FvmGenerativeDemo/output/two-spheres-self-test
+      - name: Generate printable two-sphere STL and M-image evidence
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --two-spheres --iterations 8 --out experiments/FvmGenerativeDemo/output/two-spheres
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
