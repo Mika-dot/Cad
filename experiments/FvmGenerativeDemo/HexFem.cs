@@ -247,6 +247,20 @@ internal sealed class HexFem
             compliance,Math.Sqrt(freeResidual2)/rhsNorm,reactionX,iterations);
     }
 
+    internal void ExportFirstElementStiffness(string path)
+    {
+        if(_elements.Count!=1)throw new InvalidOperationException("This fixture expects exactly one Hex8.");
+        using var writer=new StreamWriter(path,false,System.Text.Encoding.UTF8);
+        var ke=_elements[0].K;
+        for(int i=0;i<24;i++)
+        {
+            var line=new string[24];
+            for(int j=0;j<24;j++)
+                line[j]=ke[24*i+j].ToString("G17",System.Globalization.CultureInfo.InvariantCulture);
+            writer.WriteLine(string.Join(",",line));
+        }
+    }
+
     private static double Dot(double[] a,double[] b)
     {
         double sum=0;for(var i=0;i<a.Length;i++)sum+=a[i]*b[i];return sum;
