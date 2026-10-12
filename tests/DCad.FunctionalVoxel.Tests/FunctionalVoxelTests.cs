@@ -186,6 +186,82 @@ public sealed class FunctionalVoxelTests
     }
 
     [Fact]
+    public void CompleteMImageArithmeticMatchesOriginalAnalyticJets()
+    {
+        var g = new FunctionalGrid(new[] { -1.0, -1.0 }, new[] { .25, .25 }, new[] { 8, 8 });
+        var x = FunctionalField.Coordinate(2, 0);
+        var y = FunctionalField.Coordinate(2, 1);
+        var a = x * x + y * y + FunctionalField.Constant(2, 3);
+        var b = x.Sin() + FunctionalField.Constant(2, 2);
+        var aModel = FunctionalVoxelModel.Sample(a, g);
+        var bModel = FunctionalVoxelModel.Sample(b, g);
+        var cases = new[]
+        {
+            (Op: ROperation.Add, Analytical: a + b),
+            (Op: ROperation.Subtract, Analytical: a - b),
+            (Op: ROperation.Multiply, Analytical: a * b),
+            (Op: ROperation.Divide, Analytical: a / b)
+        };
+        foreach (var testCase in cases)
+        {
+            var actual = aModel.Combine(bModel, testCase.Op);
+            for (var i = 0; i < g.CellCount; i++)
+            {
+                var expected = testCase.Analytical.Evaluate(g.Centre(i));
+                var reconstructed = actual.JetAtCentre(i);
+                Assert.Equal(expected.Value, reconstructed.Value, 9);
+                for (var axis = 0; axis < 2; axis++)
+                    Assert.Equal(expected.Gradient(axis), reconstructed.Gradient(axis), 9);
+            }
+        }
+    }
+
+    [Fact]
+    public void AbsoluteValueWorksOnMImagesAwayFromNonDifferentiableZeros()
+    {
+        var g = new FunctionalGrid(new[] { -1.0 }, new[] { .25 }, new[] { 8 });
+        var x = FunctionalField.Coordinate(1, 0) - FunctionalField.Constant(1, .1);
+        var result = FunctionalVoxelModel.Sample(x, g).Abs();
+        for (var i = 0; i < g.CellCount; i++)
+        {
+            var analytical = x.Abs().Evaluate(g.Centre(i));
+            Assert.Equal(analytical.Value, result.ValueAtCentre(i), 11);
+            Assert.Equal(analytical.Gradient(0), result.JetAtCentre(i).Gradient(0), 11);
+        }
+        Assert.Throws<ArithmeticException>(() =>
+            FunctionalField.Coordinate(1, 0).Abs().Evaluate(0));
+    }
+
+    [Fact]
+    public void QuantizationDiagnosticsExposeSevereLossAtLargeFunctionScales()
+    {
+        var grid = new FunctionalGrid(new[] { 0.0 }, new[] { 1.0 }, new[] { 4 });
+        var original = FunctionalVoxelModel.Sample(FunctionalField.Constant(1, 1e9), grid);
+        var report = original.EncodeRgb24().CompareWith(original);
+        // 24-bit normal colours are not universally sufficient to reconstruct
+        // the function coefficient after dividing by a tiny homogeneous component.
+        Assert.True(report.MaxValueAbsoluteError > 1e8);
+        Assert.InRange(report.WorstVoxelId, 0, grid.CellCount - 1);
+        var calibratedReport = original.EncodeRgb24Calibrated().CompareWith(original);
+        Assert.Equal(0, calibratedReport.MaxValueAbsoluteError, 8);
+    }
+
+    [Fact]
+    public void IsoSurfaceOfPerforatedSphereIsClosedAndHasPositiveVolume()
+    {
+        var sphere = FunctionalField.Sphere(.11, .07, -.06, 1.6);
+        var hole = FunctionalField.CylinderZ(-.12, .04, .32, -3, 3);
+        var grid = CubicGrid(24, .18);
+        var model = FunctionalVoxelModel.Sample(sphere.Difference(hole), grid);
+        var mesh = FunctionalIsoSurface.Extract(model);
+        Assert.NotNull(mesh);
+        var audit = DCad.Core.MeshValidator.Validate(mesh!);
+        Assert.True(audit.IsClosedOrientedManifold,
+            $"Boundary {audit.BoundaryEdges}, winding {audit.InconsistentWindingEdges}, nonmanifold {audit.NonManifoldEdges}");
+        Assert.True(mesh!.SignedVolume() > 0);
+    }
+
+    [Fact]
     public void AffineLiftAddsZeroGradientAlongOmittedAxis()
     {
         var source = FunctionalField.Disk(0, 0, 2);
