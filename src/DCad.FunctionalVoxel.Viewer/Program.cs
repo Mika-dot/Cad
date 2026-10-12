@@ -58,13 +58,31 @@ internal static class Program
             using (var slice = new SliceView { Width = 330, Height = 330 })
             using (var image = new System.Drawing.Bitmap(330, 330))
             {
-                slice.SetModel(sample.Model);
+                slice.SetModel(sample.Model, sample.Packed);
+                slice.RawRgb24 = true;
                 slice.SetChannel(4);
                 slice.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, 330, 330));
                 if (image.GetPixel(165, 165).ToArgb() == System.Drawing.Color.White.ToArgb())
                     throw new InvalidOperationException("M-image slice was not rendered.");
                 var png = Path.Combine(temporaryFolder, "m-image.png");
                 slice.SavePng(png);
+                using (var raw = new System.Drawing.Bitmap(png))
+                {
+                    var grid = sample.Model.Grid;
+                    var i = 8;
+                    var j = 11;
+                    var k = grid.Count(2) / 2;
+                    var voxel = grid.LinearIndex(i, j, k);
+                    var expectedRgb = sample.Packed.Rgb24(4, voxel);
+                    var shownRgb = (uint)raw.GetPixel(i, grid.Count(1) - 1 - j).ToArgb() & 0xFFFFFFu;
+                    if (shownRgb != expectedRgb)
+                        throw new InvalidOperationException("M-image display does not match the original RGB24 code.");
+                }
+                slice.RawRgb24 = false;
+                var pseudoPng = Path.Combine(temporaryFolder, "m-image-heatmap.png");
+                slice.SavePng(pseudoPng);
+                if (!File.Exists(pseudoPng))
+                    throw new InvalidOperationException("M-image pseudo-colour export failed.");
                 var pngBytes = File.ReadAllBytes(png);
                 if (pngBytes.Length < 24 ||
                     !pngBytes.AsSpan(0, 8).SequenceEqual(
