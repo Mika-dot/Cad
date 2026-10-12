@@ -36,6 +36,7 @@ public sealed class MainForm : Form
     private readonly Button _build = new() { Text = "Построить / рассчитать", Width = 232, Height = 35 };
     private readonly Button _saveObj = new() { Text = "Экспорт OBJ (3D)", Width = 232, Height = 30, Enabled = false };
     private readonly Button _saveCsv = new() { Text = "Экспорт CSV (срез)", Width = 232, Height = 30, Enabled = false };
+    private readonly Button _savePng = new() { Text = "Экспорт PNG (M-образ)", Width = 232, Height = 30, Enabled = false };
     private readonly Viewport3D _viewport = new() { Dock = DockStyle.Fill };
     private readonly SliceView _slice = new() { Dock = DockStyle.Fill };
     private readonly ComboBox _channel = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -141,6 +142,7 @@ public sealed class MainForm : Form
         left.Controls.Add(cameraButton);
         left.Controls.Add(_saveObj);
         left.Controls.Add(_saveCsv);
+        left.Controls.Add(_savePng);
         left.Controls.Add(VerticalGap(10));
         left.Controls.Add(new Label
         {
@@ -197,6 +199,7 @@ public sealed class MainForm : Form
         _build.Click += async (_, _) => await RebuildAsync();
         _saveObj.Click += (_, _) => SaveObj();
         _saveCsv.Click += (_, _) => SaveCsv();
+        _savePng.Click += (_, _) => SavePng();
         Shown += async (_, _) => await RebuildAsync();
     }
 
@@ -232,6 +235,7 @@ public sealed class MainForm : Form
         _build.Enabled = false;
         _saveObj.Enabled = false;
         _saveCsv.Enabled = false;
+        _savePng.Enabled = false;
         _status.Text = "Вычисление М-образов, производных и изоповерхности...";
         try
         {
@@ -246,6 +250,7 @@ public sealed class MainForm : Form
             _channel.SelectedIndex = 0;
             _saveObj.Enabled = scene.Mesh is not null;
             _saveCsv.Enabled = true;
+            _savePng.Enabled = true;
             var grid = scene.Model.Grid;
             DisplayVoxel(grid.LinearIndex(grid.Count(0) / 2,
                 grid.Count(1) / 2, grid.Count(2) / 2));
@@ -331,6 +336,7 @@ public sealed class MainForm : Form
             $"Площадь mesh: {N(scene.Mesh?.SurfaceArea() ?? 0)} мм²",
             $"Объём mesh: {N(scene.Mesh?.SignedVolume() ?? 0)} мм³",
             $"Замкнутая mesh: {(audit?.IsClosedOrientedManifold == true ? "да" : "нет")}",
+            $"Изовид: {scene.SurfaceWarning ?? "без ошибок"}",
             $"Граничные рёбра: {audit?.BoundaryEdges ?? 0}",
             $"Невырожд. триангуляция: {audit?.DegenerateTriangles ?? 0}",
             "",
@@ -358,6 +364,27 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Ошибка OBJ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void SavePng()
+    {
+        if (_scene is null) return;
+        using var dialog = new SaveFileDialog
+        {
+            Filter = "PNG (*.png)|*.png",
+            FileName = $"functional_voxel_M{_channel.SelectedIndex - 1}_Z{_z.Value}.png"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            _slice.SavePng(dialog.FileName);
+            _status.Text = "Экспортировано: " + dialog.FileName;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Ошибка PNG",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
