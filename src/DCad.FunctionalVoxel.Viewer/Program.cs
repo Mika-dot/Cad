@@ -65,8 +65,11 @@ internal static class Program
                     throw new InvalidOperationException("M-image slice was not rendered.");
                 var png = Path.Combine(temporaryFolder, "m-image.png");
                 slice.SavePng(png);
-                if (!File.Exists(png) || new FileInfo(png).Length < 200)
-                    throw new InvalidOperationException("M-image PNG export failed.");
+                var pngBytes = File.ReadAllBytes(png);
+                if (pngBytes.Length < 24 ||
+                    !pngBytes.AsSpan(0, 8).SequenceEqual(
+                        new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }))
+                    throw new InvalidOperationException("M-image PNG signature is invalid.");
             }
             using (var engineeringForm = new MainForm())
             {
