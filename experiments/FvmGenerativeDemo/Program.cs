@@ -316,16 +316,19 @@ internal static class Visuals
                 var x=(i+0.5)*100/150;var y=-12+(j+0.5)*24/100;
                 var was=before.Approximate(new[]{x,y,z})>=0;
                 var now=after.Approximate(new[]{x,y,z})>=0;
-                return was&&!now?(byte)230:(byte)0; // specialized color below
-            },true,before,after,z);
+                if(was&&!now)return ((byte)230,(byte)75,(byte)50);
+                if(!was&&now)return ((byte)55,(byte)165,(byte)70);
+                return was?((byte)90,(byte)90,(byte)90):((byte)250,(byte)250,(byte)250);
+            });
         }
         for(int layer=0;layer<5;layer++)
         {
             var c=layer;
-            Bitmap(Path.Combine(root,$"before_M{c}.bmp"),grid.Count(0),grid.Count(1),(i,j)=>
-                Gray(before.Coefficient(c,grid.LinearIndex(i,j,grid.Count(2)/2))));
-            Bitmap(Path.Combine(root,$"after_M{c}.bmp"),grid.Count(0),grid.Count(1),(i,j)=>
-                Gray(after.Coefficient(c,grid.LinearIndex(i,j,grid.Count(2)/2))));
+            // Nearest-neighbour enlargement: preserve raw coefficients while making BMP readable.
+            Bitmap(Path.Combine(root,$"before_M{c}.bmp"),16*grid.Count(0),16*grid.Count(1),(i,j)=>
+                Gray(before.Coefficient(c,grid.LinearIndex(i/16,j/16,grid.Count(2)/2))));
+            Bitmap(Path.Combine(root,$"after_M{c}.bmp"),16*grid.Count(0),16*grid.Count(1),(i,j)=>
+                Gray(after.Coefficient(c,grid.LinearIndex(i/16,j/16,grid.Count(2)/2))));
         }
     }
 
@@ -367,18 +370,5 @@ internal static class Visuals
             }
             for(int k=w*3;k<stride;k++)bw.Write((byte)0);
         }
-    }
-    private static void Bitmap(string path,int w,int h,Func<int,int,byte> ignored,
-        bool change,FunctionalVoxelModel before,FunctionalVoxelModel after,double z)
-    {
-        Bitmap(path,w,h,(i,j)=>
-        {
-            var x=(i+0.5)*100/w;var y=-12+(j+0.5)*24/h;
-            var a=before.Approximate(new[]{x,y,z})>=0;
-            var b=after.Approximate(new[]{x,y,z})>=0;
-            if(a&&!b)return ((byte)230,(byte)75,(byte)50);
-            if(!a&&b)return ((byte)55,(byte)165,(byte)70);
-            return a?((byte)90,(byte)90,(byte)90):((byte)250,(byte)250,(byte)250);
-        });
     }
 }
