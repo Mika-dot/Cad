@@ -534,29 +534,16 @@ internal static class TwoSphereDesign
             var vals=new double[nx+1,ny+1,nz+1];
             for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
                 vals[i,j,k]=model.Approximate(new[]{ox+hx*i,oy+hy*j,oz+hz*k});
-            using var w=new StreamWriter(path,false,new UTF8Encoding(false));
-            w.WriteLine("solid two_spheres_fvm_fem");
-            var count=0;
+            // Do NOT orient facets independently using noisy central-gradient
+            // samples. The numerical FVM reconstruction is not a signed-distance
+            // field and gradient-based orientation may flip adjacent faces.
+            // Gather facets first; propagate a consistent edge winding over the
+            // shared topological mesh, then orient every connected shell outward.
+            var triangles=new List<(V A,V B,V C)>();
             void Triangle(V a,V b,V c)
             {
-                var n=Normal(Cross(b-a,c-a));
-                if(Dot(n,n)<.5e-4)return;
-                var centre=(a+b+c)*(1.0/3);
-                const double e=.1;
-                var grad=new V(
-                    model.Approximate(new[]{centre.X+e,centre.Y,centre.Z})-
-                        model.Approximate(new[]{centre.X-e,centre.Y,centre.Z}),
-                    model.Approximate(new[]{centre.X,centre.Y+e,centre.Z})-
-                        model.Approximate(new[]{centre.X,centre.Y-e,centre.Z}),
-                    model.Approximate(new[]{centre.X,centre.Y,centre.Z+e})-
-                        model.Approximate(new[]{centre.X,centre.Y,centre.Z-e}));
-                if(Dot(n,grad)>0){(b,c)=(c,b);n=n*(-1);}
-                string F(double d)=>d.ToString("G9",CultureInfo.InvariantCulture);
-                w.WriteLine($"  facet normal {F(n.X)} {F(n.Y)} {F(n.Z)}");
-                w.WriteLine("    outer loop");
-                foreach(var v in new[]{a,b,c})w.WriteLine($"      vertex {F(v.X)} {F(v.Y)} {F(v.Z)}");
-                w.WriteLine("    endloop");w.WriteLine("  endfacet");
-                count++;
+                if(Dot(Cross(b-a,c-a),Cross(b-a,c-a))<1e-8)return;
+                triangles.Add((a,b,c));
             }
             var offsets=new[]{new[]{0,0,0},new[]{1,0,0},new[]{1,1,0},new[]{0,1,0},
                               new[]{0,0,1},new[]{1,0,1},new[]{1,1,1},new[]{0,1,1}};
@@ -600,9 +587,97 @@ internal static class TwoSphereDesign
                     }
                 }
             }
+            if(triangles.Count<100)
+                throw new InvalidOperationException("STL produced too few surface facets.");
+
+            // Match vertices after the G9 STL decimal serialization. On every
+            // undirected edge there must be exactly two triangles with opposing
+            // directions. If one direction disagrees, flip the entire connected
+            // neighbourhood instead of introducing a local crack or inversion.
+            (long X,long Y,long Z) VertexId(V v) =>
+                ((long)Math.Round(v.X*10000),(long)Math.Round(v.Y*10000),
+                 (long)Math.Round(v.Z*10000));
+            var edges=new Dictionary<
+                ((long,long,long) A,(long,long,long) B),List<(int Triangle,int Direction)>>();
+            for(var i=0;i<triangles.Count;i++)
+            {
+                var (a,b,c)=triangles[i];
+                foreach(var (from,to) in new[]{(a,b),(b,c),(c,a)})
+                {
+                    var v=VertexId(from);var u=VertexId(to);
+                    if(v==u)throw new InvalidOperationException("Collapsed STL edge.");
+                    var forward=Comparer<(long,long,long)>.Default.Compare(v,u)<0;
+                    var key=forward?(v,u):(u,v);
+                    if(!edges.TryGetValue(key,out var list))
+                        edges[key]=list=new List<(int,int)>(2);
+                    list.Add((i,forward?1:-1));
+                }
+            }
+            var neighbours=new List<(int Other,int Rule)>[triangles.Count];
+            for(var i=0;i<neighbours.Length;i++)neighbours[i]=new();
+            foreach(var edge in edges.Values)
+            {
+                if(edge.Count!=2)
+                    throw new InvalidOperationException(
+                        $"STL not watertight: edge has {edge.Count} incident facets.");
+                var a=edge[0];var b=edge[1];
+                var rule=a.Direction==b.Direction?-1:1;
+                neighbours[a.Triangle].Add((b.Triangle,rule));
+                neighbours[b.Triangle].Add((a.Triangle,rule));
+            }
+            var orientation=new int[triangles.Count];
+            var shells=0;
+            for(int start=0;start<triangles.Count;start++)
+            {
+                if(orientation[start]!=0)continue;
+                shells++;
+                var queue=new Queue<int>();var component=new List<int>();
+                orientation[start]=1;queue.Enqueue(start);
+                while(queue.Count!=0)
+                {
+                    var i=queue.Dequeue();
+                    component.Add(i);
+                    foreach(var (other,rule) in neighbours[i])
+                    {
+                        var expected=orientation[i]*rule;
+                        if(orientation[other]==0)
+                        {
+                            orientation[other]=expected;queue.Enqueue(other);
+                        }
+                        else if(orientation[other]!=expected)
+                            throw new InvalidOperationException(
+                                "STL has a non-orientable or inconsistent manifold component.");
+                    }
+                }
+                double signedVolume=0;
+                foreach(var id in component)
+                {
+                    var (a,b,c)=triangles[id];
+                    signedVolume+=Dot(a,Cross(b,c))*orientation[id]/6;
+                }
+                if(Math.Abs(signedVolume)<1e-6)
+                    throw new InvalidOperationException("STL shell has zero signed volume.");
+                if(signedVolume<0)
+                    foreach(var id in component)orientation[id]*=-1;
+            }
+            using var w=new StreamWriter(path,false,new UTF8Encoding(false));
+            w.WriteLine("solid two_spheres_fvm_fem");
+            string F(double d)=>d.ToString("G9",CultureInfo.InvariantCulture);
+            for(int i=0;i<triangles.Count;i++)
+            {
+                var (a,b,c)=triangles[i];
+                if(orientation[i]<0)(b,c)=(c,b);
+                var n=Normal(Cross(b-a,c-a));
+                w.WriteLine($"  facet normal {F(n.X)} {F(n.Y)} {F(n.Z)}");
+                w.WriteLine("    outer loop");
+                foreach(var v in new[]{a,b,c})
+                    w.WriteLine($"      vertex {F(v.X)} {F(v.Y)} {F(v.Z)}");
+                w.WriteLine("    endloop");
+                w.WriteLine("  endfacet");
+            }
             w.WriteLine("endsolid two_spheres_fvm_fem");
-            if(count<100)throw new InvalidOperationException("STL produced too few surface facets.");
-            Console.WriteLine($"STL {path}: {count} triangles, marching-tetrahedra 2mm.");
+            Console.WriteLine($"STL {path}: {triangles.Count} triangles, {shells} closed oriented shell(s), marching tetrahedra.");
+
         }
     }
 }
