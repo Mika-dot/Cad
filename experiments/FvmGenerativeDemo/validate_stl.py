@@ -6,7 +6,7 @@ These tests reject nonmanifold edges, inconsistent triangle orientation,
 degenerate facets, and unexpected material gain after optimization.
 """
 from __future__ import annotations
-from collections import Counter
+from collections import Counter, defaultdict, deque
 import math
 from pathlib import Path
 import sys
@@ -33,12 +33,15 @@ def analyze(file: Path):
         return tuple(round(v,4) for v in p)
     edge_count=Counter()
     edge_orient=Counter()
+    edge_owners=defaultdict(list)
     vol=0.0
-    for a,b,c in triangles:
+    for triangle_id,(a,b,c) in enumerate(triangles):
         qa,qb,qc=key(a),key(b),key(c)
         assert len({qa,qb,qc})==3, "Degenerate triangle"
         for u,v in ((qa,qb),(qb,qc),(qc,qa)):
-            edge_count[tuple(sorted((u,v)))]+=1
+            edge=tuple(sorted((u,v)))
+            edge_count[edge]+=1
+            edge_owners[edge].append(triangle_id)
             edge_orient[(u,v)]+=1
         vol+=(a[0]*(b[1]*c[2]-b[2]*c[1])+
               a[1]*(b[2]*c[0]-b[0]*c[2])+
@@ -49,9 +52,27 @@ def analyze(file: Path):
                     if edge_orient[(edge[0],edge[1])]!=1
                     or edge_orient[(edge[1],edge[0])]!=1]
     assert not reversed_error, f"Inconsistent facet winding: {len(reversed_error)}"
+    # A closed STL can still contain disjoint components; a two-sphere
+    # connector must export one printable connected shell.
+    adjacency=[set() for _ in triangles]
+    for first,second in edge_owners.values():
+        adjacency[first].add(second)
+        adjacency[second].add(first)
+    reachable={0}
+    queue=deque([0])
+    while queue:
+        i=queue.popleft()
+        for other in adjacency[i]:
+            if other not in reachable:
+                reachable.add(other)
+                queue.append(other)
+    assert len(reachable)==len(triangles), (
+        f"Disconnected STL shells: {len(reachable)} of {len(triangles)} "
+        f"triangles attached to primary shell"
+    )
     assert vol>1000, f"Unphysical signed solid volume: {vol}"
     print(f"PASS {file}: triangles={len(triangles)}, unique_edges={len(edge_count)}, "
-          f"watertight=true, oriented=true, mesh_volume={vol:.3f} mm3")
+          f"watertight=true, oriented=true, connected=true, mesh_volume={vol:.3f} mm3")
     return vol
 
 if __name__=="__main__":
