@@ -152,7 +152,7 @@ public sealed class FunctionalVoxelTests
     [Fact]
     public void AffineArgumentMapUsesJacobianAndSecondChainRule()
     {
-        var x = FunctionalField.Coordinate(2, 0);
+        var x = FunctionalField.Coordinate(1, 0);
         var q = x * x;
         var transformed = q.MapArguments(new double[,] { { 0, 2 } }, new[] { 3.0 });
         var j = transformed.Evaluate(12, 4);
