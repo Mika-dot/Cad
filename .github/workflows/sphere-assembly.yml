@@ -73,6 +73,18 @@ jobs:
           actual_rgb=(red<<16)|(green<<8)|blue
           assert abs(actual_rgb-expected_rgb)<=1, (actual_rgb,expected_rgb)
           print("PASS: sphere minus cylinder, R-difference signs, 56 BMP and M0 color")
+      - name: Benchmark analytic functions versus voxel and M-image readout
+        shell: pwsh
+        run: |
+          dotnet run --project bench/PerformanceBench.csproj -c Release | Tee-Object -FilePath "benchmark-${{ runner.os }}.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path "benchmark-${{ runner.os }}.txt" -Pattern "BENCHMARK_COMPLETE")) { throw "Benchmark did not complete" }
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: method-comparison-benchmark-${{ runner.os }}
+          path: benchmark-${{ runner.os }}.txt
+          if-no-files-found: error
       - name: Upload both sets of BMP maps
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
