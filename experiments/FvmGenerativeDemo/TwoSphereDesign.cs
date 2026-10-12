@@ -435,7 +435,7 @@ internal static class TwoSphereDesign
 
     private static class SphereOutputs
     {
-        internal static void Write(string root,State before,State after)
+        internal static void Write(string root,State before,State after,SphereScene scene)
         {
             var grid=after.Field.Grid;
             for(int ch=0;ch<5;ch++)
@@ -448,9 +448,16 @@ internal static class TwoSphereDesign
                     (x,y)=>Gray(after.Model.Coefficient(channel,
                         grid.LinearIndex(x/8,y/8,grid.Count(2)/2))));
             }
-            foreach(var z in new[]{-6.0,0.0,6.0})
+            var zcentre=.5*(grid.Minimum(2)+grid.Minimum(2)+
+                grid.Count(2)*grid.Step(2));
+            var zSlices=scene.StandardGeometry?new[]{-6.0,0.0,6.0}:
+                new[]{zcentre-.6*scene.MinRadius,zcentre,zcentre+.6*scene.MinRadius};
+            for(int slice=0;slice<3;slice++)
             {
-                var label=z.ToString("+0;-0;0",CultureInfo.InvariantCulture);
+                var z=zSlices[slice];
+                var label=scene.StandardGeometry?
+                    z.ToString("+0;-0;0",CultureInfo.InvariantCulture):
+                    slice.ToString(CultureInfo.InvariantCulture);
                 WriteBitmap(Path.Combine(root,$"geometry_initial_z{label}.bmp"),416,144,
                     (i,j)=>SolidPixel(before.Model,i,j,z));
                 WriteBitmap(Path.Combine(root,$"geometry_optimized_z{label}.bmp"),416,144,
@@ -464,14 +471,16 @@ internal static class TwoSphereDesign
                             a?((byte)105,(byte)105,(byte)105):((byte)248,(byte)248,(byte)248);
                     });
             }
-            WriteStl(Path.Combine(root,"initial.stl"),before.Model);
-            WriteStl(Path.Combine(root,"optimized.stl"),after.Model);
+            WriteStl(Path.Combine(root,"initial.stl"),before.Model,scene);
+            WriteStl(Path.Combine(root,"optimized.stl"),after.Model,scene);
         }
 
-        private static double X(int i)=>-12+(i+.5)*104/416;
-        private static double Y(int j)=>-18+(j+.5)*36/144;
+        private static double X(FunctionalVoxelModel m,int i)=>
+            m.Grid.Minimum(0)+(i+.5)*m.Grid.Step(0)*m.Grid.Count(0)/416;
+        private static double Y(FunctionalVoxelModel m,int j)=>
+            m.Grid.Minimum(1)+(j+.5)*m.Grid.Step(1)*m.Grid.Count(1)/144;
         private static bool Solid(FunctionalVoxelModel m,int i,int j,double z) =>
-            m.Approximate(new[]{X(i),Y(j),z})>0;
+            m.Approximate(new[]{X(m,i),Y(m,j),z})>0;
         private static (byte,byte,byte) SolidPixel(FunctionalVoxelModel m,int i,int j,double z)=>
             Solid(m,i,j,z)?((byte)50,(byte)135,(byte)195):((byte)248,(byte)248,(byte)248);
         private static (byte,byte,byte) Gray(double n)
@@ -512,12 +521,19 @@ internal static class TwoSphereDesign
             var d=Math.Sqrt(Dot(a,a));
             return d>1e-14?a*(1/d):new V(0,0,0);
         }
-        private static void WriteStl(string path,FunctionalVoxelModel model)
+        private static void WriteStl(string path,FunctionalVoxelModel model,SphereScene scene)
         {
-            const int nx=52,ny=18,nz=18;
+            var grid=model.Grid;
+            int nx=scene.StandardGeometry?52:2*grid.Count(0);
+            int ny=scene.StandardGeometry?18:2*grid.Count(1);
+            int nz=scene.StandardGeometry?18:2*grid.Count(2);
+            var ox=grid.Minimum(0);var oy=grid.Minimum(1);var oz=grid.Minimum(2);
+            var hx=grid.Count(0)*grid.Step(0)/nx;
+            var hy=grid.Count(1)*grid.Step(1)/ny;
+            var hz=grid.Count(2)*grid.Step(2)/nz;
             var vals=new double[nx+1,ny+1,nz+1];
             for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
-                vals[i,j,k]=model.Approximate(new[]{-12+2.0*i,-18+2.0*j,-18+2.0*k});
+                vals[i,j,k]=model.Approximate(new[]{ox+hx*i,oy+hy*j,oz+hz*k});
             using var w=new StreamWriter(path,false,new UTF8Encoding(false));
             w.WriteLine("solid two_spheres_fvm_fem");
             var count=0;
@@ -552,7 +568,7 @@ internal static class TwoSphereDesign
                 for(int a=0;a<8;a++)
                 {
                     var oi=offsets[a][0];var oj=offsets[a][1];var ok=offsets[a][2];
-                    point[a]=new V(-12+2.0*(i+oi),-18+2.0*(j+oj),-18+2.0*(k+ok));
+                    point[a]=new V(ox+hx*(i+oi),oy+hy*(j+oj),oz+hz*(k+ok));
                     sign[a]=vals[i+oi,j+oj,k+ok];
                 }
                 foreach(var tet in tets)
