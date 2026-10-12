@@ -40,7 +40,7 @@ internal sealed class HexFem
         Func<double,double,double,double> field, FunctionalVoxelModel? model,
         double loadN, double interfaceHalfWidth, double emin = 1e-5, double epsF = 30,
         Func<double,double,double,bool>? support = null,
-        Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null
+        Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null)
     {
         if (nx < 1 || ny < 1 || nz < 1 || hx <= 0 || hy <= 0 || hz <= 0 ||
             young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1)
