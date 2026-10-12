@@ -42,4 +42,4 @@ dotnet run --project src/DCad.FunctionalVoxel.Viewer/DCad.FunctionalVoxel.Viewer
 - Для отображения пяти М-образов используются не потери при сохранении RGB24, а исходные `double`-коэффициенты. Коды RGB24 и фактическая ошибка восстановления выводятся отдельно.
 - Произвольные формулы пользователя, загрузка STEP/STL, параллельные фоны и CAD-история не входят в этот минимальный интерфейс. Исходный `Unified-CAD` и ветка `OpenGL` не изменяются.
 
-Детали вычислительного ядра: [../docs/FUNCTIONAL_VOXEL_KERNEL.md](../../../docs/FUNCTIONAL_VOXEL_KERNEL.md).
+Детали вычислительного ядра: [../docs/FUNCTIONAL_VOXEL_KERNEL.md](../../docs/FUNCTIONAL_VOXEL_KERNEL.md).
