@@ -247,12 +247,22 @@ internal static class TwoSphereDesign
         Ensure(supported>=3,"Support region must contain multiple FEM nodes.");
         Ensure(loaded>=3,"Load region must contain multiple FEM nodes.");
 
-        State Analyze(double[] p)
+        State Analyze(double[] p,bool useM=true)
         {
             var field=new TwoSphereField(p,scene);
             var model=field.Model();
+            // Actual prescribed nodes must remain material in the reconstructed
+            // five-M representation, not merely in the underlying analytic F.
+            for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+            {
+                var x=x0+i*hx;var y=y0+j*hy;var z=z0+k*hz;
+                if((IsSupport(x,y,z)||IsLoad(x,y,z))&&
+                    model.Approximate(new[]{x,y,z})<=0)
+                    throw new InvalidOperationException(
+                        "Prescribed support/load lies outside the reconstructed FVM material.");
+            }
             var fem=new HexFem(nx,ny,nz,x0,y0,z0,hx,hy,hz,young,scene.Poisson,
-                (x,y,z)=>field.Value(x,y,z),model,0,0,
+                (x,y,z)=>field.Value(x,y,z),useM?model:null,0,0,
                 emin:1e-4,epsF:Eps,support:IsSupport,
                 nodalForce:(x,y,z)=>IsLoad(x,y,z)
                     ? (forceX/loaded,forceY/loaded,forceZ/loaded):(0.0,0.0,0.0));
@@ -373,6 +383,31 @@ internal static class TwoSphereDesign
             Ensure(Math.Abs(total-1)<1e-9,"M normalization");
         }
         File.WriteAllLines(Path.Combine(root,"metrics.csv"),csv);
+        // Independent geometric-reconstruction control: same FEM mesh, load,
+        // regularization and accepted parameters; change ONLY the F evaluator.
+        var directStart=Analyze(start.P,false).Mechanics;
+        var directEnd=Analyze(current.P,false).Mechanics;
+        var geometricComparison=new List<string>{
+            "stage,volume_from_M_mm3,volume_analytic_F_mm3,relative_volume_error_pct,vm_from_M_mpa,vm_analytic_F_mpa,relative_vm_error_pct,displacement_from_M_mm,displacement_analytic_F_mm,relative_displacement_error_pct"
+        };
+        void Compare(string stage,FemResults fromM,FemResults analytic)
+        {
+            double Relative(double a,double b)=>100*(a/Math.Max(1e-15,b)-1);
+            var values=new[]{fromM.VolumeMm3,analytic.VolumeMm3,
+                Relative(fromM.VolumeMm3,analytic.VolumeMm3),
+                fromM.MaxVonMisesMpa,analytic.MaxVonMisesMpa,
+                Relative(fromM.MaxVonMisesMpa,analytic.MaxVonMisesMpa),
+                fromM.MaxDisplacementMm,analytic.MaxDisplacementMm,
+                Relative(fromM.MaxDisplacementMm,analytic.MaxDisplacementMm)};
+            geometricComparison.Add(stage+","+
+                string.Join(",",values.Select(v=>v.ToString("G17",CultureInfo.InvariantCulture))));
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "{0}: M/direct F: dV={1:F2}%, dVM={2:F2}%, dU={3:F2}% (same FEM)",
+                stage,values[2],values[5],values[8]));
+        }
+        Compare("initial",start.Mechanics,directStart);
+        Compare("optimized",current.Mechanics,directEnd);
+        File.WriteAllLines(Path.Combine(root,"fvm_vs_analytic_f.csv"),geometricComparison);
         SphereOutputs.Write(root,start,current,scene);
         var reduction=100*(1-current.Mechanics.VolumeMm3/start.Mechanics.VolumeMm3);
         File.WriteAllText(Path.Combine(root,"summary.txt"),
