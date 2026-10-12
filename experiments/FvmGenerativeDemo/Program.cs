@@ -30,6 +30,7 @@ internal static class Program
             {
                 TestMImages();
                 TestBar();
+                TestRefinement();
             }
             var iterations=self?2:3;
             for(int i=0;i<args.Length-1;i++)
@@ -250,6 +251,29 @@ internal static class Program
         Require(difference.Evaluate(0.2,0,0).Value<0,"R-difference drilled cavity sign");
         Require(difference.Evaluate(5,0,0).Value<0,"R-difference exterior sign");
         Require(sphere.Union(drill).Evaluate(0,0,0).Value>0,"R-union interior sign");
+    }
+
+    private static void TestRefinement()
+    {
+        // Same background FEM, same material and loading; change *only* M sampling.
+        var p=new[]{0.0,0.0};
+        var analytic=Field(p);
+        var refinedGrid=new FunctionalGrid(new[]{0.0,-12.0,-12.0},
+            new[]{Length/16.0,2.0,2.0},new[]{16,12,12});
+        var refined=FunctionalVoxelModel.Sample(analytic,refinedGrid);
+        var field=(Func<double,double,double,double>)((x,y,z)=>analytic.Evaluate(x,y,z).Value);
+        FemResults SolveOn(FunctionalVoxelModel? m) =>
+            new HexFem(Nx,Ny,Nz,0,-12,-12,Length/Nx,24.0/Ny,24.0/Nz,
+                Young,Poisson,field,m,LoadN,4.1).Solve();
+        var direct=SolveOn(null);
+        var coarse=SolveOn(FunctionalVoxelModel.Sample(analytic,Grid));
+        var fine=SolveOn(refined);
+        var errorCoarse=Math.Abs(coarse.VolumeMm3-direct.VolumeMm3);
+        var errorFine=Math.Abs(fine.VolumeMm3-direct.VolumeMm3);
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "FVM sampling convergence: direct V={0:F3}, 8x6x6 V={1:F3} error={2:F3}, 16x12x12 V={3:F3} error={4:F3} mm³",
+            direct.VolumeMm3,coarse.VolumeMm3,errorCoarse,fine.VolumeMm3,errorFine));
+        Require(errorFine<errorCoarse*0.70,"refining five-M lattice reduces this fixture's volume bias");
     }
 
     private static void TestBar()
