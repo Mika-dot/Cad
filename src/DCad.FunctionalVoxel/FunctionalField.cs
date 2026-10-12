@@ -1,6 +1,6 @@
 namespace DCad.FunctionalVoxel;
 
-public enum ROperation { Intersection, Union, Difference, Add, Multiply }
+public enum ROperation { Intersection, Union, Difference, Add, Subtract, Multiply, Divide }
 
 /// <summary>
 /// Analytic scalar field with the convention F(x) >= 0 for the interior of a solid.
@@ -73,6 +73,14 @@ public sealed class FunctionalField
     public FunctionalField Sin() => new(Dimension, p => _evaluate(p).Sin());
     public FunctionalField Cos() => new(Dimension, p => _evaluate(p).Cos());
 
+    /// <summary>Absolute value; its differential is undefined on the zero set.</summary>
+    public FunctionalField Abs() => new(Dimension, p =>
+    {
+        var jet = _evaluate(p);
+        if (jet.Value == 0) throw new ArithmeticException("Absolute value is not differentiable at zero.");
+        return jet.Scale(Math.Sign(jet.Value));
+    });
+
     /// <summary>
     /// Rvachev alpha-system: R-and=a+b-sqrt(a²+b²-2alpha*a*b);
     /// R-or=a+b+sqrt(a²+b²-2alpha*a*b).
@@ -92,7 +100,9 @@ public sealed class FunctionalField
     {
         if (a.Dimension != b.Dimension) throw new ArgumentException("Different argument dimensions.");
         if (op == ROperation.Add) return a + b;
+        if (op == ROperation.Subtract) return a - b;
         if (op == ROperation.Multiply) return a * b;
+        if (op == ROperation.Divide) return a / b;
         if (op == ROperation.Difference) b = -b;
         var norm2 = a * a + b * b - (a * b).Scale(2 * alpha);
         var root = norm2.Sqrt();
