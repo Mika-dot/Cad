@@ -176,7 +176,6 @@ internal sealed class TwoSphereField
 internal static class TwoSphereDesign
 {
     private const int NX=10,NY=6,NZ=6;
-    private const double YoungDefault=200000, Nu=.30;
     private const double Eps=2.0;
     private sealed record State(double[] P,TwoSphereField Field,
         FunctionalVoxelModel Model,HexFem Fem,FemResults Mechanics);
@@ -197,48 +196,74 @@ internal static class TwoSphereDesign
     internal static int Run(string[] args)
     {
         var test=args.Contains("--self-test",StringComparer.OrdinalIgnoreCase);
-        var steps=(int)Number(args,"--iterations",test?3:10);
+        var json=Arg(args,"--scene","");
+        var input=string.IsNullOrWhiteSpace(json)?SphereScene.Default:SphereScene.FromJson(json);
+        var steps=(int)Number(args,"--iterations",test?3:input.Iterations);
         Ensure(steps>=1 && steps<=50,"Iterations must be 1..50.");
         var root=Arg(args,"--out",test?"output/two-spheres-self-test":"output/two-spheres");
-        var forceX=Number(args,"--force-x",1200);
-        var forceY=Number(args,"--force-y",180);
-        var young=Number(args,"--young",YoungDefault);
-        var stressLimit=Number(args,"--stress-limit",200);
-        var deflectionLimit=Number(args,"--displacement-limit",.08);
-        Ensure(young>0&&stressLimit>0&&deflectionLimit>0,"Material and limits must be positive.");
-        Ensure(Math.Abs(forceX)+Math.Abs(forceY)>0,"Load cannot be zero.");
+        var forceX=Number(args,"--force-x",input.Force.X);
+        var forceY=Number(args,"--force-y",input.Force.Y);
+        var forceZ=Number(args,"--force-z",input.Force.Z);
+        var young=Number(args,"--young",input.Young);
+        var stressLimit=Number(args,"--stress-limit",input.StressLimit);
+        var deflectionLimit=Number(args,"--displacement-limit",input.DisplacementLimit);
+        var scene=input.With(forceX,forceY,forceZ,young,stressLimit,deflectionLimit,steps);
         Directory.CreateDirectory(root);
+
+        // Maintain exact backward-compatibility for the independently validated
+        // reference scene. For custom arbitrary orientations, adapt the 3D FEM
+        // background box and its spatial discretization to the user-supplied spheres.
+        int nx=NX,ny=NY,nz=NZ;
+        double x0=-10,y0=-18,z0=-18,hx=10,hy=6,hz=6;
+        if(!scene.StandardGeometry)
+        {
+            var (low,high)=scene.Bounds(scene.MaxRadius*.5);
+            var count=new int[3];var widths=new double[3];
+            for(int d=0;d<3;d++)
+            {
+                count[d]=Math.Clamp((int)Math.Ceiling(
+                    (high[d]-low[d])/(scene.MinRadius*.7)),6,28);
+                widths[d]=(high[d]-low[d])/count[d];
+            }
+            (nx,ny,nz)=(count[0],count[1],count[2]);
+            (x0,y0,z0)=(low[0],low[1],low[2]);
+            (hx,hy,hz)=(widths[0],widths[1],widths[2]);
+        }
 
         // Full 3D regions, not an artificially fixed x=0 FEM face.
         // A: all nodes within the attachment core of the first sphere.
         // B: distributed node force inside the second sphere.
         bool IsSupport(double x,double y,double z)=>
-            x*x+y*y+z*z<=64.0+1e-7;
+            (new Point3(x,y,z)-scene.A).Norm()<=scene.SupportRadius+1e-7;
         bool IsLoad(double x,double y,double z)=>
-            (x-80)*(x-80)+y*y+z*z<=64.0+1e-7;
-        var loaded=0;
-        for(int i=0;i<=NX;i++)for(int j=0;j<=NY;j++)for(int k=0;k<=NZ;k++)
+            (new Point3(x,y,z)-scene.B).Norm()<=scene.LoadedRadius+1e-7;
+        var loaded=0;var supported=0;
+        for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
         {
-            var x=-10+i*10;var y=-18+j*6;var z=-18+k*6;
+            var x=x0+i*hx;var y=y0+j*hy;var z=z0+k*hz;
             if(IsLoad(x,y,z))loaded++;
+            if(IsSupport(x,y,z))supported++;
         }
+        Ensure(supported>=3,"Support region must contain multiple FEM nodes.");
         Ensure(loaded>=3,"Load region must contain multiple FEM nodes.");
 
         State Analyze(double[] p)
         {
-            var field=new TwoSphereField(p);
+            var field=new TwoSphereField(p,scene);
             var model=field.Model();
-            var fem=new HexFem(NX,NY,NZ,-10,-18,-18,10,6,6,young,Nu,
+            var fem=new HexFem(nx,ny,nz,x0,y0,z0,hx,hy,hz,young,scene.Poisson,
                 (x,y,z)=>field.Value(x,y,z),model,0,0,
                 emin:1e-4,epsF:Eps,support:IsSupport,
                 nodalForce:(x,y,z)=>IsLoad(x,y,z)
-                    ? (forceX/loaded,forceY/loaded,0.0):(0.0,0.0,0.0));
+                    ? (forceX/loaded,forceY/loaded,forceZ/loaded):(0.0,0.0,0.0));
             var r=fem.Solve(maxIterations:5000);
             Ensure(r.RelativeEquilibriumResidual<1e-6,"FEM residual");
             Ensure(Math.Abs(r.ReactionXN+forceX)<Math.Max(.1,Math.Abs(forceX)*.0001),
                 "X force equilibrium");
             Ensure(Math.Abs(r.ReactionYN+forceY)<Math.Max(.1,Math.Abs(forceY)*.0001),
                 "Y force equilibrium");
+            Ensure(Math.Abs(r.ReactionZN+forceZ)<Math.Max(.1,Math.Abs(forceZ)*.0001),
+                "Z force equilibrium");
             return new State((double[])p.Clone(),field,model,fem,r);
         }
 
@@ -246,7 +271,7 @@ internal static class TwoSphereDesign
             double.IsFinite(s.Mechanics.MaxVonMisesMpa) &&
             s.Mechanics.MaxVonMisesMpa<=stressLimit &&
             s.Mechanics.MaxDisplacementMm<=deflectionLimit &&
-            Connected(s.Model);
+            Connected(s.Model,scene);
         var current=Analyze(new double[TwoSphereField.ParameterCount]);
         Ensure(Feasible(current),"Initial 3D bridge must be mechanically feasible and connected.");
         var start=current;
@@ -348,21 +373,25 @@ internal static class TwoSphereDesign
             Ensure(Math.Abs(total-1)<1e-9,"M normalization");
         }
         File.WriteAllLines(Path.Combine(root,"metrics.csv"),csv);
-        SphereOutputs.Write(root,start,current);
+        SphereOutputs.Write(root,start,current,scene);
         var reduction=100*(1-current.Mechanics.VolumeMm3/start.Mechanics.VolumeMm3);
         File.WriteAllText(Path.Combine(root,"summary.txt"),
             string.Format(CultureInfo.InvariantCulture,
-                "3D two-sphere FVM/FEM design. A=(0,0,0), B=(80,0,0), radii=10mm. "+ 
-                "Fixed: FEM nodes in A core (radius 8mm); loads on B core (radius 8mm): Fx={0}N Fy={1}N. "+
-                "E={2}MPa, nu=0.30, VM limit={3}MPa, deflection limit={4}mm. "+
-                "FEM=10x6x6 Hex8, smooth indicator epsF={5}mm, E_min/E=0.0001. "+
-                "Initial volume={6:F3}mm3, final volume={7:F3}mm3, reduction={8:F3}%, "+
-                "steps={9}, final peak VM={10:F4}MPa, max displacement={11:F7}mm, "+
-                "residual={12:E3}. Five M planes, 54 3D Gaussian F shape variables. "+
+                "3D two-sphere FVM/FEM design. A=({0},{1},{2}), B=({3},{4},{5}) mm, radii=({6},{7})mm. "+
+                "Fixed: core A, radius={8}mm; loaded: core B, radius={9}mm, "+
+                "force=({10},{11},{12})N. E={13}MPa, nu={14}, "+
+                "VM limit={15}MPa, deflection limit={16}mm. "+
+                "FEM={17}x{18}x{19} Hex8, smooth indicator epsF={20}mm, E_min/E=0.0001. "+
+                "Initial volume={21:F3}mm3, final volume={22:F3}mm3, reduction={23:F3}%, "+
+                "steps={24}, final peak VM={25:F4}MPa, max displacement={26:F7}mm, "+
+                "residual={27:E3}. Five M planes, 54 3D Gaussian F shape variables. "+
                 "STL is a discretized surface; FEM stress/mesh convergence and safety factor still need engineering certification.\n",
-                forceX,forceY,young,stressLimit,deflectionLimit,Eps,
-                start.Mechanics.VolumeMm3,current.Mechanics.VolumeMm3,reduction,
-                accepted,current.Mechanics.MaxVonMisesMpa,current.Mechanics.MaxDisplacementMm,
+                scene.A.X,scene.A.Y,scene.A.Z,scene.B.X,scene.B.Y,scene.B.Z,
+                scene.RadiusA,scene.RadiusB,scene.SupportRadius,scene.LoadedRadius,
+                forceX,forceY,forceZ,young,scene.Poisson,stressLimit,deflectionLimit,
+                nx,ny,nz,Eps,start.Mechanics.VolumeMm3,current.Mechanics.VolumeMm3,
+                reduction,accepted,current.Mechanics.MaxVonMisesMpa,
+                current.Mechanics.MaxDisplacementMm,
                 current.Mechanics.RelativeEquilibriumResidual));
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "TWO SPHERES PASS: {0} FEM-validated spatial updates, {1:F2}% material reduction, STL={2}",
@@ -373,7 +402,7 @@ internal static class TwoSphereDesign
     // Six-neighbour connectivity only tests the sampled reconstructed F solid,
     // explicitly starting at sphere A and reaching sphere B. This is stricter
     // than simply checking two patch signs, though not a topological proof.
-    private static bool Connected(FunctionalVoxelModel m)
+    private static bool Connected(FunctionalVoxelModel m,SphereScene scene)
     {
         var g=m.Grid;var n=g.CellCount;
         var solid=new bool[n];var start=-1;
@@ -381,7 +410,8 @@ internal static class TwoSphereDesign
         {
             var v=g.Centre(i);
             solid[i]=m.ValueAtCentre(i)>0;
-            if(solid[i]&&v[0]*v[0]+v[1]*v[1]+v[2]*v[2]<64)start=i;
+            if(solid[i]&&(new Point3(v[0],v[1],v[2])-scene.A).Norm()<
+                scene.SupportRadius)start=i;
         }
         if(start<0)return false;
         var visited=new bool[n];var q=new Queue<int>();
@@ -389,7 +419,7 @@ internal static class TwoSphereDesign
         while(q.Count>0)
         {
             var id=q.Dequeue();var a=g.Centre(id);
-            if((a[0]-80)*(a[0]-80)+a[1]*a[1]+a[2]*a[2]<64)
+            if((new Point3(a[0],a[1],a[2])-scene.B).Norm()<scene.LoadedRadius)
                 return true;
             for(int d=0;d<3;d++)for(int delta=-1;delta<=1;delta+=2)
             {
