@@ -68,13 +68,13 @@ internal static class Program
                 slice.SavePng(png);
                 using (var raw = new System.Drawing.Bitmap(png))
                 {
-                    var grid = sample.Model.Grid;
+                    var sampleGrid = sample.Model.Grid;
                     var i = 8;
                     var j = 11;
-                    var k = grid.Count(2) / 2;
-                    var voxel = grid.LinearIndex(i, j, k);
+                    var k = sampleGrid.Count(2) / 2;
+                    var voxel = sampleGrid.LinearIndex(i, j, k);
                     var expectedRgb = sample.Packed.Rgb24(4, voxel);
-                    var shownRgb = (uint)raw.GetPixel(i, grid.Count(1) - 1 - j).ToArgb() & 0xFFFFFFu;
+                    var shownRgb = (uint)raw.GetPixel(i, sampleGrid.Count(1) - 1 - j).ToArgb() & 0xFFFFFFu;
                     if (shownRgb != expectedRgb)
                         throw new InvalidOperationException("M-image display does not match the original RGB24 code.");
                 }
