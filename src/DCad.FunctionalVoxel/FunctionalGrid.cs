@@ -113,20 +113,28 @@ public sealed class LocalFunctionalPlane
     public static LocalFunctionalPlane FromJet(ReadOnlySpan<double> point, FunctionalJet jet)
     {
         if (point.Length != jet.Dimension) throw new ArgumentException("Point/jet dimension mismatch.");
-        var norm2 = 1.0;
-        for (var i = 0; i < jet.Dimension; i++) norm2 += jet.Gradient(i) * jet.Gradient(i);
-        var norm = Math.Sqrt(norm2);
-        if (!double.IsFinite(norm)) throw new ArithmeticException("Invalid local normal.");
+        // The published M-image colour mapping requires every homogeneous
+        // coefficient, INCLUDING the free term, to lie within [-1, 1].
         var components = new double[jet.Dimension + 2];
         var offset = -jet.Value;
         for (var i = 0; i < jet.Dimension; i++)
         {
             if (!double.IsFinite(point[i])) throw new ArgumentException("Non-finite point.");
-            components[i] = -jet.Gradient(i) / norm;
+            components[i] = -jet.Gradient(i);
             offset += jet.Gradient(i) * point[i];
         }
-        components[jet.Dimension] = 1.0 / norm;
-        components[^1] = offset / norm;
+        components[jet.Dimension] = 1.0;
+        components[^1] = offset;
+        if (!double.IsFinite(offset)) throw new ArithmeticException("Non-finite local-plane offset.");
+        var scale = components.Max(Math.Abs);
+        var sum = 0.0;
+        for (var i = 0; i < components.Length; i++)
+        {
+            var scaled = components[i] / scale;
+            sum += scaled * scaled;
+        }
+        var root = Math.Sqrt(sum);
+        for (var i = 0; i < components.Length; i++) components[i] = (components[i] / scale) / root;
         return new LocalFunctionalPlane(components);
     }
 
@@ -155,8 +163,8 @@ public sealed class LocalFunctionalPlane
 }
 
 /// <summary>
-/// RGB24-compatible packed M-images. Each channel uses its OWN affine min/max calibration;
-/// 16,777,216 grades imply quantization, not guaranteed global 1e-5 absolute accuracy.
+/// RGB24 M-images: fixed canonical sign-normalized channels or explicit optional
+/// min/max calibration. 16,777,216 grades do not guarantee 1e-5 geometric accuracy.
 /// </summary>
 public sealed class EncodedMImages
 {
@@ -176,7 +184,37 @@ public sealed class EncodedMImages
         _maxima = maxima;
     }
 
-    internal static EncodedMImages Encode(FunctionalGrid grid, double[][] channels)
+    /// <summary>
+    /// Published sign-normalized M-image encoding:
+    /// M=round((1+n)/2 * (2^24-1)), n=2*M/(2^24-1)-1.
+    /// The integer limit is P-1, not P=2^24, to preserve both endpoints.
+    /// The channel calibrations are fixed at [-1,1] for every image.
+    /// </summary>
+    internal static EncodedMImages EncodeCanonical(FunctionalGrid grid, double[][] channels)
+    {
+        var layers = new uint[channels.Length][];
+        var minima = Enumerable.Repeat(-1.0, channels.Length).ToArray();
+        var maxima = Enumerable.Repeat(1.0, channels.Length).ToArray();
+        for (var c = 0; c < channels.Length; c++)
+        {
+            layers[c] = new uint[channels[c].Length];
+            for (var i = 0; i < channels[c].Length; i++)
+            {
+                var n = channels[c][i];
+                if (!double.IsFinite(n) || n < -1.0 - 1e-12 || n > 1.0 + 1e-12)
+                    throw new ArithmeticException("M-image coefficient is outside [-1,1]. Normalize its full homogeneous vector.");
+                var x = (Math.Clamp(n, -1, 1) + 1.0) * (0.5 * MaxRgb);
+                layers[c][i] = (uint)Math.Round(x, MidpointRounding.AwayFromZero);
+            }
+        }
+        return new EncodedMImages(grid, layers, minima, maxima);
+    }
+
+    /// <summary>
+    /// Optional range-adaptive packing for engineering experiments.
+    /// It is NOT the canonical M-image colour mapping of Tolok et al.
+    /// </summary>
+    internal static EncodedMImages EncodeCalibrated(FunctionalGrid grid, double[][] channels)
     {
         var layers = new uint[channels.Length][];
         var minima = new double[channels.Length];
