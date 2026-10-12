@@ -18,6 +18,8 @@ internal static class Program
         var self=args.Contains("--self-test",StringComparer.OrdinalIgnoreCase);
         try
         {
+            if(args.Contains("--two-spheres",StringComparer.OrdinalIgnoreCase))
+                return TwoSphereDesign.Run(args);
             if(args.Length>=2 && args[0]=="--export-element-ke")
             {
                 var fixture=new HexFem(1,1,1,0,0,0,10,10,10,Young,Poisson,
