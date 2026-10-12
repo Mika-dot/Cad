@@ -78,6 +78,18 @@ internal static class Program
                 File.ReadLines(csv).Count() != 1 + 24 * 24)
                 throw new InvalidOperationException("OBJ or CSV export is incomplete.");
 
+            var alphaModel = SceneBuilder.Build(new SceneSettings(
+                ShapeKind.TwoSpheresUnion, FieldView.Original, 10, 3, 16, .35));
+            if (alphaModel.Model.ChannelCount != 5)
+                throw new InvalidOperationException("R-alpha reconstruction failed.");
+
+            var integral = SceneBuilder.Build(new SceneSettings(
+                ShapeKind.Sphere, FieldView.IntegralX, 10, 3, 16, 0, -.02));
+            var grid = integral.Model.Grid;
+            var atInitial = grid.LinearIndex(0, 4, 4);
+            if (Math.Abs(integral.Model.ValueAtCentre(atInitial) - (-.02)) > 1e-8)
+                throw new InvalidOperationException("Cauchy initial value was ignored.");
+
             var derivative = SceneBuilder.Build(new SceneSettings(
                 ShapeKind.Sphere, FieldView.DerivativeX, 10, 3, 16));
             if (derivative.Model.VoxelCount != 16 * 16 * 16)
