@@ -25,3 +25,9 @@ jobs:
         run: dotnet build src/DCad.FunctionalVoxel/DCad.FunctionalVoxel.csproj -c Release --warnaserror
       - name: Execute numerical kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release --logger "console;verbosity=normal"
+      - name: Build complete DCad solution on Windows
+        if: runner.os == 'Windows'
+        run: dotnet build DCad.sln -c Release
+      - name: Run existing CAD regression tests on Windows
+        if: runner.os == 'Windows'
+        run: dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release --logger "console;verbosity=minimal"
