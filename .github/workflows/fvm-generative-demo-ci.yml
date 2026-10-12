@@ -32,6 +32,11 @@ jobs:
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --two-spheres --self-test --iterations 3 --out experiments/FvmGenerativeDemo/output/two-spheres-self-test
       - name: Generate printable two-sphere STL and M-image evidence
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --two-spheres --iterations 8 --out experiments/FvmGenerativeDemo/output/two-spheres
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate closed oriented STL and geometric mass reduction
+        run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/two-spheres/initial.stl experiments/FvmGenerativeDemo/output/two-spheres/optimized.stl
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
