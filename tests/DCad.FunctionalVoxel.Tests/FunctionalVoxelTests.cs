@@ -32,7 +32,7 @@ public sealed class FunctionalVoxelTests
         Assert.Equal(11.0, plane.ValueAt(p), 11);
         Assert.Equal(-2.0, plane.Gradient(0), 11);
         Assert.Equal(-4.0, plane.Gradient(1), 11);
-        var length = Math.Sqrt(Enumerable.Range(0, 4).Sum(i => Math.Pow(plane.Coefficient(i), 2)));
+        var length = Math.Sqrt(Enumerable.Range(0, 5).Sum(i => Math.Pow(plane.Coefficient(i), 2)));
         Assert.Equal(1.0, length, 12);
         var q = new[] { 1.01, 2.0, 3.0 };
         Assert.Equal(.0001, plane.ValueAt(q) - FunctionalField.Sphere(0, 0, 0, 5).Evaluate(q).Value, 8);
@@ -132,9 +132,57 @@ public sealed class FunctionalVoxelTests
         var packed = model.EncodeRgb24();
         for (var i = 0; i < g.CellCount; i++)
         {
-            Assert.Equal(0u, packed.Rgb24(0, i));
-            Assert.Equal(7.0, packed.ToModel().ValueAtCentre(i), 11);
+            Assert.InRange(Math.Abs(packed.Decode(0, i)), 0, 1.0 / EncodedMImages.MaxRgb);
+            Assert.InRange(Math.Abs(7.0 - packed.ToModel().ValueAtCentre(i)), 0, 1e-5);
         }
+    }
+
+    [Fact]
+    public void PublishedMImageColorLawUsesFixedMinusOneToPlusOneScale()
+    {
+        var field = FunctionalField.Sphere(5, 0, 0, 4);
+        var grid = new FunctionalGrid(new[] { 3.0, -1.0, -1.0 },
+            new[] { 1.0, 1.0, 1.0 }, new[] { 4, 2, 2 });
+        var model = FunctionalVoxelModel.Sample(field, grid);
+        var image = model.EncodeRgb24();
+        for (var c = 0; c < model.ChannelCount; c++)
+        {
+            Assert.Equal(-1.0, image.Minimum(c));
+            Assert.Equal(1.0, image.Maximum(c));
+            for (var i = 0; i < grid.CellCount; i++)
+            {
+                var coefficient = model.Coefficient(c, i);
+                Assert.InRange(coefficient, -1.0, 1.0);
+                Assert.InRange(Math.Abs(image.Decode(c, i) - coefficient),
+                    0, 1.0 / EncodedMImages.MaxRgb + 1e-13);
+            }
+        }
+    }
+
+    [Fact]
+    public void CalibratedRgb24IsSeparateFromCanonicalScientificMapping()
+    {
+        var grid = new FunctionalGrid(new[] { 0.0 }, new[] { 1.0 }, new[] { 4 });
+        var model = FunctionalVoxelModel.Sample(FunctionalField.Constant(1, 7), grid);
+        var canonical = model.EncodeRgb24();
+        var calibrated = model.EncodeRgb24Calibrated();
+        Assert.NotEqual(0u, canonical.Rgb24(0, 0));
+        Assert.Equal(0u, calibrated.Rgb24(0, 0));
+        Assert.Equal(7, calibrated.ToModel().ValueAtCentre(0), 10);
+    }
+
+    [Fact]
+    public void HomogeneousPlaneNormalIncludesOffsetAndIsGloballyNormalized()
+    {
+        var point = new[] { 10.0, -20.0, 30.0 };
+        var j = FunctionalField.Sphere(0, 0, 0, 7).Evaluate(point);
+        var plane = LocalFunctionalPlane.FromJet(point, j);
+        var unitLength = Math.Sqrt(Enumerable.Range(0, plane.ChannelCount)
+            .Sum(c => plane.Coefficient(c) * plane.Coefficient(c)));
+        Assert.Equal(1.0, unitLength, 12);
+        for (var c = 0; c < plane.ChannelCount; c++)
+            Assert.InRange(plane.Coefficient(c), -1.0, 1.0);
+        Assert.Equal(j.Value, plane.ValueAt(point), 10);
     }
 
     [Fact]
