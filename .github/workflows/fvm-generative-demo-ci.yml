@@ -37,6 +37,10 @@ jobs:
           python-version: '3.13'
       - name: Validate closed oriented STL and geometric mass reduction
         run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/two-spheres/initial.stl experiments/FvmGenerativeDemo/output/two-spheres/optimized.stl
+      - name: Solve a configurable rotated unequal-sphere JSON engineering scene
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --two-spheres --scene experiments/FvmGenerativeDemo/two_spheres_example.json --iterations 3 --out experiments/FvmGenerativeDemo/output/configured-spheres
+      - name: Validate user-configured solid STL
+        run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/configured-spheres/initial.stl experiments/FvmGenerativeDemo/output/configured-spheres/optimized.stl
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
