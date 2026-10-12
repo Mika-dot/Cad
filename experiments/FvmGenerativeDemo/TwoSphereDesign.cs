@@ -9,33 +9,52 @@ namespace FvmGenerativeDemo;
 // This is NOT density thresholding/element deletion or the old two-parameter taper.
 internal sealed class TwoSphereField
 {
-    internal const double Length=80, SphereRadius=10, InitialBridgeRadius=7;
     internal const int ParameterCount=54;
     private readonly double[] _p;
-    internal readonly FunctionalGrid Grid = new(
-        new[]{-12.0,-18.0,-18.0}, new[]{4.0,3.0,3.0}, new[]{26,12,12});
+    private readonly SphereScene _scene;
+    internal readonly FunctionalGrid Grid;
+    private double Length => _scene.Length;
+    private double BridgeRadius => .7*_scene.MinRadius;
 
-    internal TwoSphereField(double[] p)
+    internal TwoSphereField(double[] p,SphereScene scene)
     {
         if(p.Length!=ParameterCount||p.Any(v=>!double.IsFinite(v)))
             throw new ArgumentException("Expected 54 finite 3D shape parameters.");
         _p=(double[])p.Clone();
+        _scene=scene;
+        if(scene.StandardGeometry)
+            Grid=new FunctionalGrid(new[]{-12.0,-18.0,-18.0},
+                new[]{4.0,3.0,3.0},new[]{26,12,12});
+        else
+        {
+            var (lo,hi)=scene.Bounds(scene.MaxRadius*.75);
+            var step=scene.MinRadius*.40;
+            var counts=new int[3];var sizes=new double[3];
+            for(int d=0;d<3;d++)
+            {
+                counts[d]=Math.Clamp((int)Math.Ceiling((hi[d]-lo[d])/step),4,55);
+                sizes[d]=(hi[d]-lo[d])/counts[d];
+            }
+            Grid=new FunctionalGrid(lo,sizes,counts);
+        }
     }
 
     private static double SmoothMax(double a,double b,double t) =>
         .5*(a+b+Math.Sqrt((a-b)*(a-b)+t*t));
     private static double SmoothMin(double a,double b,double t) =>
         .5*(a+b-Math.Sqrt((a-b)*(a-b)+t*t));
-    private static double Sphere(double x,double y,double z,double cx) =>
-        SphereRadius-Math.Sqrt((x-cx)*(x-cx)+y*y+z*z+1e-8);
+    private static double Sphere(double x,double y,double z,double cx,double radius) =>
+        radius-Math.Sqrt((x-cx)*(x-cx)+y*y+z*z+1e-8);
 
     // Each basis controls a local volume of space (not a ring/radius scalar).
-    internal static double Basis(int i,double x,double y,double z,
+    internal double Basis(int i,double x,double y,double z,
         out double bx,out double by,out double bz)
     {
         var station=i/9; var lateral=i%9;
-        double cx=10+station*12,cy=((lateral/3)-1)*7.5,cz=((lateral%3)-1)*7.5;
-        const double sx=14, sy=7.5;
+        double cx=Length*(.125+station*.15),
+            cy=((lateral/3)-1)*(.75*_scene.MinRadius),
+            cz=((lateral%3)-1)*(.75*_scene.MinRadius);
+        double sx=.175*Length, sy=.75*_scene.MinRadius;
         var s=Math.Clamp(x/Length,0,1);
         double sin=Math.Sin(Math.PI*s),cos=Math.Cos(Math.PI*s);
         var fade=sin*sin;
@@ -49,7 +68,7 @@ internal sealed class TwoSphereField
 
     private double Tube(double x,double y,double z)
     {
-        double t=InitialBridgeRadius-Math.Sqrt(y*y+z*z+1e-6);
+        double t=BridgeRadius-Math.Sqrt(y*y+z*z+1e-6);
         for(int i=0;i<ParameterCount;i++)
         {
             var b=Basis(i,x,y,z,out _,out _,out _);
@@ -60,15 +79,18 @@ internal sealed class TwoSphereField
 
     private (double Field,double DFieldDTube) EvaluateWithFactor(double x,double y,double z)
     {
+        var local=_scene.Local(new Point3(x,y,z));
+        x=local.X;y=local.Y;z=local.Z;
         var t=Tube(x,y,z);
-        const double smoothing=.35;
-        var left=x+SphereRadius;
-        var right=Length+SphereRadius-x;
+        var smoothing=.035*_scene.MinRadius;
+        var left=x+_scene.RadiusA;
+        var right=Length+_scene.RadiusB-x;
         var cut1=SmoothMin(t,left,smoothing);
         var d1=.5*(1+(left-t)/Math.Sqrt((left-t)*(left-t)+smoothing*smoothing));
         var cut2=SmoothMin(cut1,right,smoothing);
         var d2=.5*(1+(right-cut1)/Math.Sqrt((right-cut1)*(right-cut1)+smoothing*smoothing));
-        var solids=SmoothMax(Sphere(x,y,z,0),Sphere(x,y,z,Length),smoothing);
+        var solids=SmoothMax(Sphere(x,y,z,0,_scene.RadiusA),
+            Sphere(x,y,z,Length,_scene.RadiusB),smoothing);
         var value=SmoothMax(solids,cut2,smoothing);
         var d3=.5*(1+(cut2-solids)/Math.Sqrt((cut2-solids)*(cut2-solids)+smoothing*smoothing));
         return (value,d1*d2*d3);
@@ -112,8 +134,10 @@ internal sealed class TwoSphereField
             var fz=(Factor(x,y,z+h)-Factor(x,y,z-h))/(2*h);
             for(int i=0;i<ParameterCount;i++)
             {
-                var b=Basis(i,x,y,z,out var dx,out var dy,out var dz);
-                jets[i][v]=new[]{f*b,fx*b+f*dx,fy*b+f*dy,fz*b+f*dz};
+                var local=_scene.Local(new Point3(x,y,z));
+                var b=Basis(i,local.X,local.Y,local.Z,out var dx,out var dy,out var dz);
+                var world=_scene.VectorWorld(dx,dy,dz);
+                jets[i][v]=new[]{f*b,fx*b+f*world.X,fy*b+f*world.Y,fz*b+f*world.Z};
             }
         }
         return jets;
