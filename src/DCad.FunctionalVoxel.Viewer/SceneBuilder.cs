@@ -51,10 +51,11 @@ public static class SceneBuilder
         ArgumentNullException.ThrowIfNull(settings);
         if (!double.IsFinite(settings.Radius) || settings.Radius < .1 || settings.Radius > 200)
             throw new ArgumentOutOfRangeException(nameof(settings), "Radius must be 0.1..200 mm.");
-        if (!double.IsFinite(settings.SecondaryRadius) ||
-            settings.SecondaryRadius < .05 || settings.SecondaryRadius >= settings.Radius)
+        if (!double.IsFinite(settings.SecondaryRadius) || settings.SecondaryRadius < .05 ||
+            (settings.Shape == ShapeKind.SphereMinusCylinder &&
+             settings.SecondaryRadius >= settings.Radius))
             throw new ArgumentOutOfRangeException(nameof(settings),
-                "Hole radius must be positive and smaller than outer radius.");
+                "Hole radius must be positive and, for a through-hole, smaller than outer radius.");
         if (settings.Resolution < 12 || settings.Resolution > 80)
             throw new ArgumentOutOfRangeException(nameof(settings),
                 "Grid resolution must be between 12 and 80.");
