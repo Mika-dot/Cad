@@ -1,4 +1,4 @@
-name: Sphere assembly - four M-images per Z-slice
+name: Sphere assembly - original versus cylinder subtraction
 
 on:
   push:
@@ -18,41 +18,60 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Build single-class console app
+      - name: Build minimal console app
         run: dotnet build SphereAssembly.csproj -c Release --warnaserror
-      - name: Calculate sphere and draw four maps per slice
+      - name: Show 2 geometries and RGB maps for each Z
         run: dotnet run --project SphereAssembly.csproj -c Release --no-build
-      - name: Independently verify BMP count and physical RGB pixels
+      - name: Check geometry sign, BMP count and sample pixels independently
         shell: python
         run: |
-          import struct
+          import struct, math
           from pathlib import Path
           files = list(Path("output").glob("*.bmp"))
-          assert len(files) == 28, f"Expected 4x7=28 BMP files, got {len(files)}"
-          assert all(x.read_bytes()[:2] == b"BM" for x in files)
-          img = Path("output/Z04_M0.bmp").read_bytes()  # z=+1
-          width, height = struct.unpack_from("<ii", img, 18)
-          assert (width, height) == (7, 7)
-          def encoded(x,y,z):
-              f = 9-x*x-y*y-z*z
-              dx = -2*x
-              dy = -2*y
-              a0=-dx
-              a1=-dy
-              a2=1
-              a3=dx*x+dy*y-f
-              norm=(a0*a0+a1*a1+a2*a2+a3*a3)**.5
-              return int((a0/norm+1)*16777215/2 + .5)
-          # x=2 is column 5, y=1 is row 4 (BMP rows start at bottom).
-          offset=54+4*24+5*3
-          blue,green,red=img[offset:offset+3]
-          rgb=(red<<16)|(green<<8)|blue
-          assert abs(rgb-encoded(2,1,1)) <= 1, (rgb, encoded(2,1,1))
-          print("CHECK_PASS: 28 BMP; sample M0 RGB matches independent math")
-      - name: Upload BMP maps
+          assert len(files) == 56, f"Expected 7 Z slices x 2 figures x 4 M-images: got {len(files)}"
+          for figure in ["sphere", "sphere_minus_cylinder"]:
+              for layer in range(7):
+                  for channel in range(4):
+                      path = Path(f"output/{figure}_Z{layer:02}_M{channel}.bmp")
+                      assert path.exists(), path
+                      data = path.read_bytes()
+                      assert data[:2] == b"BM"
+                      assert struct.unpack_from("<ii",data,18) == (7,7)
+          def sphere(x,y,z): return 9-x*x-y*y-z*z
+          def cylinder(x,y,z): return 1-x*x-y*y
+          def cut(x,y,z):
+              a=sphere(x,y,z)
+              outside=-cylinder(x,y,z)
+              return a+outside-math.sqrt(a*a+outside*outside)
+          assert sphere(0,0,0)>0 and cut(0,0,0)<0, "Cylinder did not remove centre"
+          assert cut(2,0,0)>0, "Removed outside of cylinder"
+          assert abs(cut(1,0,0))<1e-12, "Cylinder boundary must remain zero"
+          assert abs(cut(3,0,0))<1e-12, "Sphere boundary must remain zero"
+          # For x=2,y=1,z=1: a=3; outside cylinder=4; cut F=2.
+          # d(cut)/dx = -0.8; the first local coefficient is +0.8.
+          x,y,z=2,1,1
+          a=sphere(x,y,z)
+          outside=-cylinder(x,y,z)
+          root=math.sqrt(a*a+outside*outside)
+          deriv_x=-2*x+2*x-(a*(-2*x)+outside*(2*x))/root
+          deriv_y=-2*y+2*y-(a*(-2*y)+outside*(2*y))/root
+          coeff0=-deriv_x
+          coeff1=-deriv_y
+          coeff2=1
+          coeff3=deriv_x*x+deriv_y*y-cut(x,y,z)
+          norm=math.sqrt(coeff0**2+coeff1**2+coeff2**2+coeff3**2)
+          expected_rgb=round((coeff0/norm+1)*16777215/2)
+          data=Path("output/sphere_minus_cylinder_Z04_M0.bmp").read_bytes()
+          stride=(7*3+3)//4*4
+          offset=54+4*stride+5*3  # row y=+1; column x=+2
+          blue,green,red=data[offset:offset+3]
+          actual_rgb=(red<<16)|(green<<8)|blue
+          assert abs(actual_rgb-expected_rgb)<=1, (actual_rgb,expected_rgb)
+          print("PASS: sphere minus cylinder, R-difference signs, 56 BMP and M0 color")
+      - name: Upload both sets of BMP maps
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: sphere-assembly-4-M-images-per-Z
+          name: sphere-minus-cylinder-56-M-images
           path: output/*.bmp
           if-no-files-found: error

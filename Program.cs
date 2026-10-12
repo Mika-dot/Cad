@@ -70,11 +70,30 @@ class Program
         Func<double, double, double, double> sphere =
             (x, y, z) => 9 - x * x - y * y - z * z;
 
+        // Цилиндр вдоль оси Z, радиус 1 мм.
+        Func<double, double, double, double> cylinder =
+            (x, y, z) => 1 - x * x - y * y;
+
+        // Разность: оставляем всё внутри сферы, кроме внутренности цилиндра.
+        // Это R-пересечение сферы и ОБРАТНОЙ функции цилиндра.
+        Func<double, double, double, double> sphereMinusCylinder = (x, y, z) =>
+        {
+            double sphereValue = sphere(x, y, z);
+            double cylinderValue = cylinder(x, y, z);
+            double outsideCylinder = -cylinderValue;
+            double squareSphere = sphereValue * sphereValue;
+            double squareOutside = outsideCylinder * outsideCylinder;
+            return sphereValue + outsideCylinder -
+                   Math.Sqrt(squareSphere + squareOutside);
+        };
+
+        // Два примера считаются одним и тем же классом FunctionPixels.
+        string[] figureNames = { "sphere", "sphere_minus_cylinder" };
+        Func<double, double, double, double>[] figures = { sphere, sphereMinusCylinder };
+
         double pixelStepMm = 1;
         double fromMm = -3;
         double toMm = 3;
-
-        var calculator = new FunctionPixels(sphere, pixelStepMm);
         int pixelsPerSide = (int)Math.Round((toMm - fromMm) / pixelStepMm) + 1;
 
         Directory.CreateDirectory("output");
@@ -83,7 +102,32 @@ class Program
         for (int layer = 0; layer < pixelsPerSide; layer++)
         {
             double z = fromMm + layer * pixelStepMm;
-            uint[,,] image = new uint[4, pixelsPerSide, pixelsPerSide];
+
+            // Самый простой контроль выреза: два сечения РЯДОМ.
+            // '#' — внутри, 'o' — поверхность, '.' — снаружи.
+            Console.WriteLine();
+            Console.WriteLine($"Z = {z:0.##} мм: СФЕРА                     СФЕРА - ЦИЛИНДР");
+            for (int yPixel = pixelsPerSide - 1; yPixel >= 0; yPixel--)
+            {
+                double y = fromMm + yPixel * pixelStepMm;
+                for (int figureIndex = 0; figureIndex < figures.Length; figureIndex++)
+                {
+                    for (int xPixel = 0; xPixel < pixelsPerSide; xPixel++)
+                    {
+                        double x = fromMm + xPixel * pixelStepMm;
+                        double value = figures[figureIndex](x, y, z);
+                        Console.Write(value > 0.0000001 ? "##" : value < -0.0000001 ? ".." : "oo");
+                    }
+                    Console.Write("       ");
+                }
+                Console.WriteLine();
+            }
+
+            // Сначала выводим 4 М-образа сферы, затем 4 образа сферы с вырезом.
+            for (int figureIndex = 0; figureIndex < figures.Length; figureIndex++)
+            {
+                var calculator = new FunctionPixels(figures[figureIndex], pixelStepMm);
+                uint[,,] image = new uint[4, pixelsPerSide, pixelsPerSide];
 
             for (int yPixel = 0; yPixel < pixelsPerSide; yPixel++)
             {
@@ -103,7 +147,7 @@ class Program
 
             // Четыре цветные картинки рядом прямо в консоли.
             Console.WriteLine();
-            Console.WriteLine($"Z = {z:0.##} мм");
+            Console.WriteLine($"{figureNames[figureIndex]}, Z = {z:0.##} мм");
             Console.WriteLine("M0 / X           M1 / Y           M2 / F           M3 / свободный");
             for (int yPixel = pixelsPerSide - 1; yPixel >= 0; yPixel--)
             {
@@ -125,15 +169,17 @@ class Program
             // Те же четыре картинки как обычные BMP-файлы.
             for (int channel = 0; channel < 4; channel++)
             {
-                string file = $"output/Z{layer:00}_M{channel}.bmp";
+                string file = $"output/{figureNames[figureIndex]}_Z{layer:00}_M{channel}.bmp";
                 SaveBitmap(file, image, channel, pixelsPerSide);
             }
+            } // конец цикла по двум фигурам
         }
 
         Console.WriteLine();
-        Console.WriteLine($"Готово: {pixelsPerSide} слоёв, по 4 картинки; файлы в output/");
+        Console.WriteLine($"Готово: {pixelsPerSide} слоёв × 2 фигуры × 4 картинки = {pixelsPerSide * 8} BMP; файлы в output/");
+        var calculator = new FunctionPixels(sphereMinusCylinder, pixelStepMm);
         uint[] sample = calculator.FourColors(2, 1, 1);
-        Console.WriteLine("Проверка пикселя (2,1,1):");
+        Console.WriteLine("СФЕРА МИНУС ЦИЛИНДР, пиксель (2,1,1):");
         for (int channel = 0; channel < 4; channel++)
             Console.WriteLine($"M{channel} = #{sample[channel]:X6}");
     }
