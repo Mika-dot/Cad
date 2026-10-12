@@ -63,6 +63,10 @@ internal static class Program
                 slice.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, 330, 330));
                 if (image.GetPixel(165, 165).ToArgb() == System.Drawing.Color.White.ToArgb())
                     throw new InvalidOperationException("M-image slice was not rendered.");
+                var png = Path.Combine(temporaryFolder, "m-image.png");
+                slice.SavePng(png);
+                if (!File.Exists(png) || new FileInfo(png).Length < 200)
+                    throw new InvalidOperationException("M-image PNG export failed.");
             }
             using (var engineeringForm = new MainForm())
             {
@@ -89,6 +93,14 @@ internal static class Program
             var atInitial = grid.LinearIndex(0, 4, 4);
             if (Math.Abs(integral.Model.ValueAtCentre(atInitial) - (-.02)) > 1e-8)
                 throw new InvalidOperationException("Cauchy initial value was ignored.");
+
+            // Zero Cauchy value is mathematically valid, even though its
+            // initial lattice plane is singular for the mesh extractor.
+            var zeroCauchy = SceneBuilder.Build(new SceneSettings(
+                ShapeKind.Sphere, FieldView.IntegralX, 10, 3, 16, 0, 0));
+            if (zeroCauchy.Model.VoxelCount != 16 * 16 * 16 ||
+                string.IsNullOrWhiteSpace(zeroCauchy.SurfaceWarning))
+                throw new InvalidOperationException("Singular iso-surface must not lose computed M-images.");
 
             var derivative = SceneBuilder.Build(new SceneSettings(
                 ShapeKind.Sphere, FieldView.DerivativeX, 10, 3, 16));
