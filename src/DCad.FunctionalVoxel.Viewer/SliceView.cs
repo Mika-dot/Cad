@@ -51,6 +51,13 @@ public sealed class SliceView : Panel
         RebuildBitmap();
     }
 
+    /// <summary>Export raw slice samples as a colour-coded PNG (one image pixel per voxel).</summary>
+    public void SavePng(string filename)
+    {
+        if (_bitmap is null) throw new InvalidOperationException("No M-image slice to save.");
+        _bitmap.Save(filename, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
     public void SelectVoxel(int id)
     {
         if (_model is null) return;
