@@ -7,9 +7,9 @@ namespace FvmGenerativeDemo;
 // limits. All coordinates mm; forces N; E/stresses MPa.
 internal readonly record struct Point3(double X,double Y,double Z)
 {
-    internal static Point3 operator +(Point3 a,Point3 b)=>new(a.X+b.X,a.Y+b.Y,a.Z+b.Z);
-    internal static Point3 operator -(Point3 a,Point3 b)=>new(a.X-b.X,a.Y-b.Y,a.Z-b.Z);
-    internal static Point3 operator *(Point3 a,double b)=>new(a.X*b,a.Y*b,a.Z*b);
+    public static Point3 operator +(Point3 a,Point3 b)=>new(a.X+b.X,a.Y+b.Y,a.Z+b.Z);
+    public static Point3 operator -(Point3 a,Point3 b)=>new(a.X-b.X,a.Y-b.Y,a.Z-b.Z);
+    public static Point3 operator *(Point3 a,double b)=>new(a.X*b,a.Y*b,a.Z*b);
     internal static double Dot(Point3 a,Point3 b)=>a.X*b.X+a.Y*b.Y+a.Z*b.Z;
     internal static Point3 Cross(Point3 a,Point3 b)=>
         new(a.Y*b.Z-a.Z*b.Y,a.Z*b.X-a.X*b.Z,a.X*b.Y-a.Y*b.X);
