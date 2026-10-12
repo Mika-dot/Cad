@@ -37,6 +37,39 @@ internal static class Program
             if (sample.MeshAudit?.IsClosedOrientedManifold != true)
                 throw new InvalidOperationException("Sphere surface must be a closed manifold.");
 
+            // Exercise the actual Windows drawing controls without showing a window.
+            using (var viewport = new Viewport3D { Width = 560, Height = 420 })
+            using (var preview = new System.Drawing.Bitmap(560, 420))
+            {
+                viewport.SetMesh(sample.Mesh);
+                viewport.DrawToBitmap(preview, new System.Drawing.Rectangle(0, 0, 560, 420));
+                var coloured = 0;
+                for (var y = 40; y < 370; y += 6)
+                for (var x = 40; x < 520; x += 6)
+                {
+                    var pixel = preview.GetPixel(x, y);
+                    if (pixel.B > pixel.R + 10 && pixel.B > pixel.G + 8)
+                        coloured++;
+                }
+                if (coloured < 150)
+                    throw new InvalidOperationException(
+                        $"3D viewport rendered too few surface pixels ({coloured}).");
+            }
+            using (var slice = new SliceView { Width = 330, Height = 330 })
+            using (var image = new System.Drawing.Bitmap(330, 330))
+            {
+                slice.SetModel(sample.Model);
+                slice.SetChannel(4);
+                slice.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, 330, 330));
+                if (image.GetPixel(165, 165).ToArgb() == System.Drawing.Color.White.ToArgb())
+                    throw new InvalidOperationException("M-image slice was not rendered.");
+            }
+            using (var engineeringForm = new MainForm())
+            {
+                if (engineeringForm.Controls.Count < 2)
+                    throw new InvalidOperationException("Missing GUI layout or status bar.");
+            }
+
             var obj = Path.Combine(temporaryFolder, "sphere.obj");
             var csv = Path.Combine(temporaryFolder, "slice.csv");
             SceneExports.WriteObj(sample, obj);
