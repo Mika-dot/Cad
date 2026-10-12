@@ -41,3 +41,33 @@ print(f"Original FEM_Voxel scikit-fem vs C# Hex8: relative_Frobenius_error={rel:
 if rel>2e-10 or sym>2e-12:
     raise SystemExit("FAIL: C# Hex8 local matrix differs from original Python")
 print("PASS: 24x24 element stiffness matches original FEM_Voxel")
+
+# Independent 3D bar solution through the original FEM_Voxel's skfem backend.
+# This is a shared-physics fixture; it does not invoke the SIMP optimizer.
+from scipy.sparse.linalg import spsolve
+from skfem import Basis, ElementVector, ElementHex1, asm
+bar=MeshHex.init_tensor(np.linspace(0.,100.,9),
+                        np.linspace(-5.,5.,3),
+                        np.linspace(-5.,5.,3))
+basis=Basis(bar,ElementVector(ElementHex1()))
+ke_global=asm(fem.linear_elasticity(*fem.lame_parameters(200000.,0.)),basis).tocsr()
+force=np.zeros(basis.N)
+right=np.flatnonzero(np.isclose(bar.p[0],100.))
+for nid in right:
+    y,z=bar.p[1,nid],bar.p[2,nid]
+    wy=0.5 if np.isclose(abs(y),5.) else 1.
+    wz=0.5 if np.isclose(abs(z),5.) else 1.
+    force[basis.nodal_dofs[0,nid]]=1000.*wy*wz/4.
+fixed_nodes=np.flatnonzero(np.isclose(bar.p[0],0.))
+fixed=basis.nodal_dofs[:,fixed_nodes].ravel()
+free=np.setdiff1d(np.arange(basis.N),fixed)
+u=np.zeros(basis.N)
+u[free]=spsolve(ke_global[free,:][:,free],force[free])
+reaction=(ke_global@u-force)[basis.nodal_dofs[0,fixed_nodes]].sum()
+right_dx=np.array([u[basis.nodal_dofs[0,nid]] for nid in right])
+extension=right_dx.mean()
+resid=np.linalg.norm((ke_global@u-force)[free])/np.linalg.norm(force[free])
+print(f"Original FEM_Voxel scikit-fem bar: extension={extension:.9f} mm, reactionX={reaction:.7f} N, relative_residual={resid:.3e}")
+if abs(extension-0.005)>5e-7 or abs(reaction+1000)>5e-5 or resid>1e-8:
+    raise SystemExit("FAIL: original FEM_Voxel bar benchmark differs from analytical and C#")
+print("PASS: original Python FEM backend reproduces the C# 100x10x10 bar (nu=0, F=1000 N)")
