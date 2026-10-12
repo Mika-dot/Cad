@@ -18,6 +18,14 @@ internal static class Program
         var self=args.Contains("--self-test",StringComparer.OrdinalIgnoreCase);
         try
         {
+            if(args.Length>=2 && args[0]=="--export-element-ke")
+            {
+                var fixture=new HexFem(1,1,1,0,0,0,10,10,10,Young,Poisson,
+                    (x,y,z)=>1000,null,1000,10);
+                fixture.ExportFirstElementStiffness(args[1]);
+                Console.WriteLine("PASS exported 24x24 reference Hex8 stiffness in N/mm");
+                return 0;
+            }
             if(self)
             {
                 TestMImages();
