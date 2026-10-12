@@ -263,6 +263,36 @@ public sealed class FunctionalVoxelTests
     }
 
     [Fact]
+    public void VoxelLocalSearchFindsExactGridMinimumOfConvexParaboloid()
+    {
+        var grid = new FunctionalGrid(new[] { -2.0, -2.0 },
+            new[] { .5, .5 }, new[] { 8, 8 });
+        var x = FunctionalField.Coordinate(2, 0) - FunctionalField.Constant(2, .25);
+        var y = FunctionalField.Coordinate(2, 1) + FunctionalField.Constant(2, .25);
+        var objective = FunctionalVoxelModel.Sample(x * x + y * y, grid);
+        var result = FunctionalVoxelLocalSearch.Minimize(objective, grid.LinearIndex(0, 0));
+        Assert.True(result.AtCoordinateLocalMinimum);
+        Assert.Equal(grid.LinearIndex(4, 3), result.BestVoxelId);
+        Assert.Equal(0, result.BestValue, 10);
+        Assert.True(result.VisitedVoxelIds.Count > 1);
+    }
+
+    [Fact]
+    public void VoxelLocalSearchRespectsIndependentSignConstraint()
+    {
+        var grid = new FunctionalGrid(new[] { -2.0, -2.0 },
+            new[] { .5, .5 }, new[] { 8, 8 });
+        var x = FunctionalField.Coordinate(2, 0) - FunctionalField.Constant(2, .25);
+        var y = FunctionalField.Coordinate(2, 1) + FunctionalField.Constant(2, .25);
+        var objective = FunctionalVoxelModel.Sample(x * x + y * y, grid);
+        // Only the x <= 0 half-plane is admissible.
+        var admissible = FunctionalVoxelModel.Sample(-FunctionalField.Coordinate(2, 0), grid);
+        var result = FunctionalVoxelLocalSearch.Minimize(objective, grid.LinearIndex(0, 0), admissible);
+        Assert.Equal(grid.LinearIndex(3, 3), result.BestVoxelId);
+        Assert.All(result.VisitedVoxelIds, id => Assert.True(admissible.ValueAtCentre(id) >= 0));
+    }
+
+    [Fact]
     public void GridsRejectInvalidGeometryAndComposition()
     {
         Assert.Throws<ArgumentException>(() =>
