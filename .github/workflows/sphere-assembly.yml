@@ -73,6 +73,8 @@ jobs:
           actual_rgb=(red<<16)|(green<<8)|blue
           assert abs(actual_rgb-expected_rgb)<=1, (actual_rgb,expected_rgb)
           print("PASS: sphere minus cylinder, R-difference signs, 56 BMP and M0 color")
+      - name: Validate report Markdown
+        run: python bench/check_markdown.py
       - name: Verify equal-memory accuracy counterexample
         run: python bench/check_accuracy.py
       - name: Benchmark analytic functions versus voxel and M-image readout
