@@ -1,0 +1,37 @@
+name: FVM generative mechanics numerical CI
+on:
+  push:
+    branches:
+      - feature/fvm-generative-mechanics
+    paths:
+      - 'experiments/FvmGenerativeDemo/**'
+      - 'src/DCad.FunctionalVoxel/**'
+      - '.github/workflows/fvm-generative-demo-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  numerical-validation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile autonomous C# mechanics experiment
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Execute 3D bar and closed-loop FEM tests (PASS/FAIL)
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --self-test --out experiments/FvmGenerativeDemo/output
+      - name: Run original five-M kernel tests
+        run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
+      - name: Upload numerical CSV and BMP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fvm-fem-numerical-${{ matrix.os }}
+          path: experiments/FvmGenerativeDemo/output/
+          if-no-files-found: warn
