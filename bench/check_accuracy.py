@@ -47,7 +47,31 @@ binary_error = abs(binary_surface_x - R)
 assert abs(fvm_error - 3/28) < 1e-12
 assert abs(binary_error - 1/39) < 1e-12
 assert fvm_error / binary_error > 4
+# A second, independent precision counterexample for 5-channel RGB24.
+# Constant F = 10^9: (0,0,0,1,-10^9) normalized as a single 5-vector.
+constant = 1_000_000_000.0
+length = math.hypot(1.0, constant)
+m_u = 1.0 / length
+m_free = -constant / length
+max_rgb = 2**24 - 1
+
+def encode_rgb24(value):
+    # Python round() and C# Math.Round() both use ties-to-even by default.
+    return round((value + 1.0) * max_rgb / 2.0)
+
+def decode_rgb24(code):
+    return 2.0 * code / max_rgb - 1.0
+
+colour_u = encode_rgb24(m_u)
+colour_free = encode_rgb24(m_free)
+restored_constant = -decode_rgb24(colour_free) / decode_rgb24(colour_u)
+relative_loss = abs(restored_constant - constant) / constant
+assert colour_u == 0x800000 and colour_free == 0
+assert abs(restored_constant - 16777215.0) < 0.01
+assert relative_loss > 0.98
+
 print("EQUAL_MEMORY_PROOF_PASS")
 print(f"FVM 8^3, 5 x RGB24: {fvm_bytes} B, zero_x={fvm_zero_x:.9f}, error={fvm_error:.9f} mm")
 print(f"Bit-packed 39^3: {binary_bytes} B, zero_x={binary_surface_x:.9f}, error={binary_error:.9f} mm")
 print(f"Error ratio FVM / binary = {fvm_error / binary_error:.6f}x on the selected ray")
+print(f"RGB24_PRECISION_CASE_PASS: original={constant:.0f}; restored={restored_constant:.3f}; relative_error={relative_loss:.3%}")
