@@ -131,6 +131,25 @@ public sealed class FunctionalVoxelModel
     }
 
     /// <summary>
+    /// Pointwise absolute value computed solely from M-images. Like the analytical
+    /// absolute-value field it is nondifferentiable at a zero-valued voxel centre.
+    /// </summary>
+    public FunctionalVoxelModel Abs()
+    {
+        var layers = Allocate(Grid);
+        for (var i = 0; i < VoxelCount; i++)
+        {
+            var at = Grid.Centre(i);
+            var source = Plane(i).ReconstructJet(at);
+            if (source.Value == 0)
+                throw new ArithmeticException("Absolute-value jet is undefined at a zero voxel.");
+            var plane = LocalFunctionalPlane.FromJet(at, source.Scale(Math.Sign(source.Value)));
+            for (var c = 0; c < ChannelCount; c++) layers[c][i] = plane.Coefficient(c);
+        }
+        return new FunctionalVoxelModel(Grid, layers);
+    }
+
+    /// <summary>
     /// Value of an analytic partial derivative is available directly from M-images.
     /// Its gradients (second derivatives of the source) are approximated by finite
     /// differences of the sampled partial values. This is not an exact Hessian.
