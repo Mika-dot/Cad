@@ -38,7 +38,9 @@ internal sealed class HexFem
     internal HexFem(int nx, int ny, int nz, double x0, double y0, double z0,
         double hx, double hy, double hz, double young, double poisson,
         Func<double,double,double,double> field, FunctionalVoxelModel? model,
-        double loadN, double interfaceHalfWidth, double emin = 1e-5, double epsF = 30)
+        double loadN, double interfaceHalfWidth, double emin = 1e-5, double epsF = 30,
+        Func<double,double,double,bool>? support = null,
+        Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null
     {
         if (nx < 1 || ny < 1 || nz < 1 || hx <= 0 || hy <= 0 || hz <= 0 ||
             young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1)
@@ -55,26 +57,55 @@ internal sealed class HexFem
             for (int b=0;b<3;b++) _elastic[a,b]=a==b?lambda+2*mu:lambda;
         for (int a=3;a<6;a++) _elastic[a,a]=mu;
 
-        for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
-            for(int a=0;a<3;a++) _fixed[3*Node(0,j,k)+a]=true;
-
-        // Consistent nodal traction in X on the preserved right-hand attachment.
-        double totalWeight=0;
-        for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+        if(support is null)
         {
-            var y=_y0+j*_hy; var z=_z0+k*_hz;
-            if(Math.Abs(y)>interfaceHalfWidth+1e-9 || Math.Abs(z)>interfaceHalfWidth+1e-9) continue;
-            totalWeight+=(j==0||j==ny?0.5:1)*(k==0||k==nz?0.5:1);
+            for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+                for(int a=0;a<3;a++) _fixed[3*Node(0,j,k)+a]=true;
         }
-        if(totalWeight<=0) throw new ArgumentException("No loaded face nodes found.");
-        for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+        else
         {
-            var y=_y0+j*_hy; var z=_z0+k*_hz;
-            if(Math.Abs(y)>interfaceHalfWidth+1e-9 || Math.Abs(z)>interfaceHalfWidth+1e-9) continue;
-            var weight=(j==0||j==ny?0.5:1)*(k==0||k==nz?0.5:1);
-            _rhs[3*Node(nx,j,k)]+=loadN*weight/totalWeight;
+            var supported=0;
+            for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+                if(support(_x0+i*_hx,_y0+j*_hy,_z0+k*_hz))
+                {
+                    supported++;
+                    for(int a=0;a<3;a++)_fixed[3*Node(i,j,k)+a]=true;
+                }
+            if(supported<1)throw new ArgumentException("No nodes inside the prescribed support.");
         }
 
+        if(nodalForce is null)
+        {
+            // Consistent nodal traction in X on the preserved right-hand attachment.
+            double totalWeight=0;
+            for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+            {
+                var y=_y0+j*_hy; var z=_z0+k*_hz;
+                if(Math.Abs(y)>interfaceHalfWidth+1e-9 || Math.Abs(z)>interfaceHalfWidth+1e-9) continue;
+                totalWeight+=(j==0||j==ny?0.5:1)*(k==0||k==nz?0.5:1);
+            }
+            if(totalWeight<=0) throw new ArgumentException("No loaded face nodes found.");
+            for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+            {
+                var y=_y0+j*_hy; var z=_z0+k*_hz;
+                if(Math.Abs(y)>interfaceHalfWidth+1e-9 || Math.Abs(z)>interfaceHalfWidth+1e-9) continue;
+                var weight=(j==0||j==ny?0.5:1)*(k==0||k==nz?0.5:1);
+                _rhs[3*Node(nx,j,k)]+=loadN*weight/totalWeight;
+            }
+    
+        }
+        else
+        {
+            double netForce=0;
+            for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+            {
+                var f=nodalForce(_x0+i*_hx,_y0+j*_hy,_z0+k*_hz);
+                var node=3*Node(i,j,k);
+                _rhs[node]+=f.X;_rhs[node+1]+=f.Y;_rhs[node+2]+=f.Z;
+                netForce+=Math.Abs(f.X)+Math.Abs(f.Y)+Math.Abs(f.Z);
+            }
+            if(netForce<1e-8)throw new ArgumentException("No force was applied to the loaded region.");
+        }
         for(int i=0;i<nx;i++)for(int j=0;j<ny;j++)for(int k=0;k<nz;k++)
         {
             var e=new Element();
@@ -202,11 +233,11 @@ internal sealed class HexFem
 
         var ku=new double[Dofs];
         Multiply(u,ku,false);
-        double freeResidual2=0, reactionX=0, compliance=0;
+        double freeResidual2=0, reactionX=0, reactionY=0, reactionZ=0, compliance=0;
         for(int a=0;a<Dofs;a++)
         {
             var error=ku[a]-_rhs[a];
-            if(_fixed[a]) { if(a%3==0) reactionX+=error; }
+            if(_fixed[a]) { if(a%3==0) reactionX+=error; else if(a%3==1) reactionY+=error; else reactionZ+=error; }
             else freeResidual2+=error*error;
             compliance+=_rhs[a]*u[a];
         }
@@ -244,7 +275,41 @@ internal sealed class HexFem
             maxStress=Math.Max(maxStress,peak);
         }
         return new FemResults(u,stresses,Volume,MassKg,maxStress,maxDisp,
-            compliance,Math.Sqrt(freeResidual2)/rhsNorm,reactionX,iterations);
+            compliance,Math.Sqrt(freeResidual2)/rhsNorm,reactionX,iterations,reactionY,reactionZ);
+    }
+
+    // Linear elasticity adjoint: dC/dF_q = -u^T(dK/dF_q)u, C=f^T u.
+    // This derives sensitivities from each 3D Gauss point, not voxel deletion.
+    internal IReadOnlyList<GaussSensitivity> GaussSensitivities(FemResults solved)
+    {
+        if(solved.Displacements.Length!=Dofs)throw new ArgumentException("Wrong displacement vector.");
+        var result=new List<GaussSensitivity>(_elements.Count*8);
+        var b=new double[6,24];
+        var det=_hx*_hy*_hz/8;
+        var u=solved.Displacements;
+        var ei=0;
+        for(int i=0;i<_nx;i++)for(int j=0;j<_ny;j++)for(int k=0;k<_nz;k++)
+        {
+            var e=_elements[ei++];
+            foreach(var xi in Gauss)foreach(var eta in Gauss)foreach(var zeta in Gauss)
+            {
+                var x=_x0+(i+.5*(1+xi))*_hx;
+                var y=_y0+(j+.5*(1+eta))*_hy;
+                var z=_z0+(k+.5*(1+zeta))*_hz;
+                var field=Evaluate(x,y,z);
+                if(Math.Abs(field)>=_epsF)continue;
+                Shape(xi,eta,zeta,b);
+                var strain=new double[6];
+                for(int a=0;a<6;a++)for(int c=0;c<24;c++)
+                    strain[a]+=b[a,c]*u[e.Id[c]];
+                double energy=0;
+                for(int a=0;a<6;a++)for(int d=0;d<6;d++)
+                    energy+=strain[a]*_elastic[a,d]*strain[d];
+                var dv=det/(2*_epsF);
+                result.Add(new GaussSensitivity(x,y,z,dv,-dv*(1-_emin)*energy));
+            }
+        }
+        return result;
     }
 
     internal void ExportFirstElementStiffness(string path)
@@ -269,4 +334,7 @@ internal sealed class HexFem
 
 internal sealed record FemResults(double[] Displacements,double[] ElementVonMises,
     double VolumeMm3,double MassKg,double MaxVonMisesMpa,double MaxDisplacementMm,
-    double ComplianceNmm,double RelativeEquilibriumResidual,double ReactionXN,int CgIterations);
+    double ComplianceNmm,double RelativeEquilibriumResidual,double ReactionXN,int CgIterations,
+    double ReactionYN=0,double ReactionZN=0);
+
+internal sealed record GaussSensitivity(double X,double Y,double Z,double DVolumeDField,double DComplianceDField);
