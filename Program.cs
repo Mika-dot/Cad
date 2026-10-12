@@ -177,8 +177,8 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine($"Готово: {pixelsPerSide} слоёв × 2 фигуры × 4 картинки = {pixelsPerSide * 8} BMP; файлы в output/");
-        var calculator = new FunctionPixels(sphereMinusCylinder, pixelStepMm);
-        uint[] sample = calculator.FourColors(2, 1, 1);
+        var sampleCalculator = new FunctionPixels(sphereMinusCylinder, pixelStepMm);
+        uint[] sample = sampleCalculator.FourColors(2, 1, 1);
         Console.WriteLine("СФЕРА МИНУС ЦИЛИНДР, пиксель (2,1,1):");
         for (int channel = 0; channel < 4; channel++)
             Console.WriteLine($"M{channel} = #{sample[channel]:X6}");
