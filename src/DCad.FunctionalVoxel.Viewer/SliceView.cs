@@ -10,6 +10,8 @@ namespace DCad.FunctionalVoxel.Viewer;
 public sealed class SliceView : Panel
 {
     private FunctionalVoxelModel? _model;
+    private EncodedMImages? _packed;
+    private bool _rawRgb24;
     private Bitmap? _bitmap;
     private int _slice;
     private int _channel = -1;
@@ -29,9 +31,25 @@ public sealed class SliceView : Panel
     public int SliceIndex => _slice;
     public int Channel => _channel;
 
-    public void SetModel(FunctionalVoxelModel? model)
+    /// <summary>True renders the stored RGB24 codes without pseudo-colour remapping.</summary>
+    public bool RawRgb24
     {
+        get => _rawRgb24;
+        set
+        {
+            if (_rawRgb24 == value) return;
+            _rawRgb24 = value;
+            RebuildBitmap();
+        }
+    }
+
+    public void SetModel(FunctionalVoxelModel? model, EncodedMImages? packed = null)
+    {
+        if (model is not null && packed is not null &&
+            (!model.Grid.SameGeometry(packed.Grid) || model.ChannelCount != packed.ChannelCount))
+            throw new ArgumentException("Packed M-images do not correspond to this model.");
         _model = model;
+        _packed = packed;
         _selectedVoxel = -1;
         _slice = model is null ? 0 : model.Grid.Count(2) / 2;
         RebuildBitmap();
@@ -51,7 +69,7 @@ public sealed class SliceView : Panel
         RebuildBitmap();
     }
 
-    /// <summary>Export raw slice samples as a colour-coded PNG (one image pixel per voxel).</summary>
+    /// <summary>Export the currently selected display mode (true RGB24 or pseudo-colour) at one pixel per voxel.</summary>
     public void SavePng(string filename)
     {
         if (_bitmap is null) throw new InvalidOperationException("No M-image slice to save.");
@@ -93,8 +111,14 @@ public sealed class SliceView : Panel
         for (var j = 0; j < ny; j++)
         for (var i = 0; i < nx; i++)
         {
-            var normalized = Math.Clamp(values[j * nx + i] / maxAbs, -1, 1);
-            _bitmap.SetPixel(i, ny - j - 1, Palette(normalized));
+            var color = Palette(Math.Clamp(values[j * nx + i] / maxAbs, -1, 1));
+            if (_channel >= 0 && _rawRgb24 && _packed is not null)
+            {
+                var id = grid.LinearIndex(i, j, _slice);
+                var rgb = _packed.Rgb24(_channel, id);
+                color = Color.FromArgb((int)((rgb >> 16) & 255), (int)((rgb >> 8) & 255), (int)(rgb & 255));
+            }
+            _bitmap.SetPixel(i, ny - j - 1, color);
         }
         Invalidate();
     }
