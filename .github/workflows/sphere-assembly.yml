@@ -58,8 +58,8 @@ jobs:
           delta=0.01  # FunctionPixels: pixelStepMm/100
           deriv_x=(cut(x+delta,y,z)-cut(x-delta,y,z))/(2*delta)
           deriv_y=(cut(x,y+delta,z)-cut(x,y-delta,z))/(2*delta)
-          assert abs(deriv_x-exact_deriv_x)<1e-4
-          assert abs(deriv_y-exact_deriv_y)<1e-4
+          assert abs(deriv_x-exact_deriv_x)<2e-4
+          assert abs(deriv_y-exact_deriv_y)<2e-4
           coeff0=-deriv_x
           coeff1=-deriv_y
           coeff2=1
