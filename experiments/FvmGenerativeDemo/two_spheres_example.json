@@ -1,0 +1,10 @@
+{
+  "sphereA": { "center": [-10.0, 0.0, 0.0], "radius": 10.0 },
+  "sphereB": { "center": [65.0, 20.0, 10.0], "radius": 11.0 },
+  "loadN": [800.0, 120.0, 80.0],
+  "youngMpa": 200000.0,
+  "poisson": 0.30,
+  "maxVonMisesMpa": 300.0,
+  "maxDisplacementMm": 0.30,
+  "iterations": 3
+}
