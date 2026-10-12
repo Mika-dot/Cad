@@ -254,4 +254,43 @@ public sealed class EncodedMImages
         }
         return FunctionalVoxelModel.FromChannels(Grid, channels);
     }
+
+    /// <summary>
+    /// Report actual reconstruction error, not merely 24-bit component error.
+    /// Division by the (sometimes small) coefficient of u amplifies RGB noise.
+    /// </summary>
+    public MImageQuantizationReport CompareWith(FunctionalVoxelModel original)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        if (!Grid.SameGeometry(original.Grid))
+            throw new ArgumentException("Different lattices for quantization comparison.");
+        var restored = ToModel();
+        var worstValue = 0.0;
+        var worstRelative = 0.0;
+        var worstGradient = 0.0;
+        var worstId = 0;
+        for (var voxel = 0; voxel < VoxelCount; voxel++)
+        {
+            var initial = original.JetAtCentre(voxel);
+            var decoded = restored.JetAtCentre(voxel);
+            var error = Math.Abs(initial.Value - decoded.Value);
+            if (error > worstValue)
+            {
+                worstValue = error;
+                worstId = voxel;
+            }
+            worstRelative = Math.Max(worstRelative, error / Math.Max(1.0, Math.Abs(initial.Value)));
+            for (var axis = 0; axis < Grid.Dimension; axis++)
+                worstGradient = Math.Max(worstGradient,
+                    Math.Abs(initial.Gradient(axis) - decoded.Gradient(axis)));
+        }
+        return new MImageQuantizationReport(worstValue, worstRelative, worstGradient, worstId);
+    }
 }
+
+/// <summary>Quantization errors measured in the original model's coordinate/field units.</summary>
+public sealed record MImageQuantizationReport(
+    double MaxValueAbsoluteError,
+    double MaxValueRelativeError,
+    double MaxGradientAbsoluteError,
+    int WorstVoxelId);
