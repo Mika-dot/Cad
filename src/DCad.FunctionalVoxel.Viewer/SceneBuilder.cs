@@ -40,7 +40,8 @@ public sealed record SceneResult(
     MeshValidationReport? MeshAudit,
     EncodedMImages Packed,
     MImageQuantizationReport Quantization,
-    double PositiveVoxelVolume);
+    double PositiveVoxelVolume,
+    string? SurfaceWarning = null);
 
 /// <summary>
 /// Thin adapter: all functions and R-operations are performed by the existing
@@ -114,11 +115,23 @@ public static class SceneBuilder
         };
 
         // Iso-surface is only an output for display; no independent raster CSG.
-        var mesh = FunctionalIsoSurface.Extract(result);
+        Mesh3d? mesh = null;
+        string? surfaceWarning = null;
+        try
+        {
+            mesh = FunctionalIsoSurface.Extract(result);
+        }
+        catch (InvalidOperationException e)
+        {
+            // A non-differentiable or sample-centre isosurface must not make
+            // already computed M-images and field slices inaccessible.
+            surfaceWarning = e.Message;
+        }
         var audit = mesh is null ? null : MeshValidator.Validate(mesh);
         var packed = result.EncodeRgb24();
         var quant = packed.CompareWith(result);
-        return new SceneResult(settings, result, mesh, audit, packed, quant, result.PositiveRegionMeasure());
+        return new SceneResult(settings, result, mesh, audit, packed, quant,
+            result.PositiveRegionMeasure(), surfaceWarning);
     }
 }
 
