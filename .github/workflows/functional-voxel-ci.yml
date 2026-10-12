@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'src/DCad.FunctionalVoxel/**'
+      - 'src/DCad.FunctionalVoxel.Viewer/**'
       - 'tests/DCad.FunctionalVoxel.Tests/**'
       - 'DCad.sln'
 
@@ -31,3 +32,16 @@ jobs:
       - name: Run existing CAD regression tests on Windows
         if: runner.os == 'Windows'
         run: dotnet test tests/DCad.Tests/DCad.Tests.csproj -c Release --logger "console;verbosity=minimal"
+      - name: Smoke-test functional voxel viewer (geometry and files, no window)
+        if: runner.os == 'Windows'
+        run: dotnet run --project src/DCad.FunctionalVoxel.Viewer/DCad.FunctionalVoxel.Viewer.csproj -c Release --no-build -- --self-test
+      - name: Publish self-contained win-x64 executable
+        if: runner.os == 'Windows'
+        run: dotnet publish src/DCad.FunctionalVoxel.Viewer/DCad.FunctionalVoxel.Viewer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o artifacts/fvm-viewer
+      - name: Upload functional voxel viewer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DCad-FunctionalVoxel-Viewer-win-x64
+          path: artifacts/fvm-viewer/**
+          if-no-files-found: error
