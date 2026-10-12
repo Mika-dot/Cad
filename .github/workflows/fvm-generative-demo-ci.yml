@@ -26,6 +26,8 @@ jobs:
         run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
       - name: Execute 3D bar and closed-loop FEM tests (PASS/FAIL)
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --self-test --out experiments/FvmGenerativeDemo/output
+      - name: Run default three-step shape optimization and write BMP evidence
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --iterations 3 --out experiments/FvmGenerativeDemo/output/three-steps
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
@@ -35,3 +37,26 @@ jobs:
           name: fvm-fem-numerical-${{ matrix.os }}
           path: experiments/FvmGenerativeDemo/output/
           if-no-files-found: warn
+
+  compare-original-python-fem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Obtain original Python FEM_Voxel branch read-only
+        run: |
+          git fetch --depth=1 origin FEM_Voxel
+          mkdir -p original-python
+          git archive FETCH_HEAD openscad_gen | tar -x -C original-python
+      - name: Install original FEM numerical backend
+        run: python -m pip install numpy scipy scikit-fem
+      - name: Export standalone C# exact Hex8 stiffness
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release -- --export-element-ke element-ke.csv
+      - name: Compare 24x24 stiffness to original FEM_Voxel scikit-fem
+        run: python experiments/FvmGenerativeDemo/compare_original_fem.py original-python element-ke.csv
