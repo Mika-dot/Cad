@@ -33,6 +33,12 @@ jobs:
         run: python experiments/FvmGenerativeDemo/validate_stl.py output/free-six/initial.stl output/free-six/optimized.stl
       - name: Independently verify six-body geometry, forbidden volumes and binary stress
         run: python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_6_bodies.json output/free-six
+      - name: Evaluate free topology under multiple static, modal, pulse and thermal constraints
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_multiphysics.json --iterations 1 --gradient-check --self-test --refinement-report --out output/free-multiphysics
+      - name: Verify multiphysics binary mechanics and obstacle geometry
+        run: python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_multiphysics.json output/free-multiphysics
+      - name: Assert multiphysics free-field STL reduction
+        run: python experiments/FvmGenerativeDemo/validate_stl.py output/free-multiphysics/initial.stl output/free-multiphysics/optimized.stl
       - uses: actions/upload-artifact@v4
         if: always()
         with:
