@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "min": [
+      -13,
+      -31,
+      -19
+    ],
+    "max": [
+      85,
+      31,
+      19
+    ]
+  },
+  "routingStepMm": 4,
+  "fvmStepMm": 2.6,
+  "bridgeRadiusMm": 5,
+  "femCells": [
+    12,
+    11,
+    7
+  ],
+  "iterations": 1,
+  "assertDetour": true,
+  "material": {
+    "youngMpa": 200000,
+    "poisson": 0.3,
+    "densityKgM3": 7850
+  },
+  "limits": {
+    "vonMisesMpa": 800,
+    "displacementMm": 1.5
+  },
+  "bodies": [
+    {
+      "id": "fixed",
+      "role": "fixed",
+      "seed": [
+        0,
+        0,
+        0
+      ],
+      "shape": {
+        "type": "sphere",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "radius": 9
+      }
+    },
+    {
+      "id": "right",
+      "role": "load",
+      "seed": [
+        68,
+        0,
+        0
+      ],
+      "forceN": [
+        120,
+        20,
+        0
+      ],
+      "shape": {
+        "type": "sphere",
+        "center": [
+          68,
+          0,
+          0
+        ],
+        "radius": 9
+      }
+    },
+    {
+      "id": "upper",
+      "role": "anchor",
+      "seed": [
+        68,
+        23,
+        0
+      ],
+      "shape": {
+        "type": "sphere",
+        "center": [
+          68,
+          23,
+          0
+        ],
+        "radius": 8
+      }
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "blocking-pillar",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          32,
+          0,
+          -17
+        ],
+        "b": [
+          32,
+          0,
+          17
+        ],
+        "radius": 12
+      },
+      "clearanceMm": 2
+    }
+  ]
+}
