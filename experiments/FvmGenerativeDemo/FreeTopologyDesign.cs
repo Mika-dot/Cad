@@ -331,6 +331,10 @@ internal static class FreeTopologyDesign
         if(string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Usage --free-topology scene.json");
         var scene=UniversalScene.Load(path);
+        if(args.Contains("--require-mesh-convergence")&&
+           !args.Contains("--refinement-report"))
+            throw new ArgumentException(
+                "--require-mesh-convergence requires --refinement-report.");
         int steps=int.Parse(Arg(args,"--iterations",scene.Iterations.ToString(CultureInfo.InvariantCulture)),
             CultureInfo.InvariantCulture);
         if(steps<1||steps>40)throw new ArgumentException("Iterations must be 1..40");
@@ -848,6 +852,11 @@ internal static class FreeTopologyDesign
             File.WriteAllText(Path.Combine(outDir,"mesh_refinement.json"),
                 JsonSerializer.Serialize(report,
                     new JsonSerializerOptions{WriteIndented=true}));
+            if(args.Contains("--require-mesh-convergence")&&!meshConverged.Value)
+                throw new InvalidOperationException(
+                    "MESH CONVERGENCE NOT DEMONSTRATED: design withheld. "+
+                    "Refine FVM/FEM grids and boundary conditions and rerun; "+
+                    "do not use the current coarse stress estimate for manufacturing.");
         }
         File.WriteAllLines(Path.Combine(outDir,"metrics.csv"),metrics);
         TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"optimized.stl"),
@@ -891,6 +900,7 @@ internal static class FreeTopologyDesign
             refinedBinaryVonMisesMpa=refined?.Stress,
             refinedBinaryDisplacementMm=refined?.Displacement,
             meshConvergenceScreenPassed=meshConverged,
+            verifiedManufacturingStrength=false,
             binaryMultiphysicsFeasible=finalBinary.AdditionalPass,
             firstFrequencyHz=double.IsFinite(current.FirstHz)?current.FirstHz:(double?)null,
             worstImpactMm=double.IsFinite(current.ImpactMm)?current.ImpactMm:(double?)null,
