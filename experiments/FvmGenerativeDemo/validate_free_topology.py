@@ -7,6 +7,7 @@ from pathlib import Path
 import json
 import math
 import sys
+import struct
 from validate_keepouts import inspect_stl
 
 def validate(scene_path,results,require_void=False):
@@ -75,17 +76,78 @@ def validate(scene_path,results,require_void=False):
             t=inv*dot(edge2,q)
             if t>1e-9:hit+=1
         return hit%2==1
-    checked=0
-    for body in scene["bodies"]:
+    # A centre-only test is insufficient: it can pass while a significant
+    # fraction of a required input fixture is missing. Sample multiple
+    # well-inside locations, independently of FVM and original C# CSG.
+    def fixture_samples(body):
         shape=body["shape"]
-        point=body.get("seed",shape.get("center"))
-        if point is None and "a" in shape and "b" in shape:
-            point=[(shape["a"][k]+shape["b"][k])*.5 for k in range(3)]
-        if point is None:continue
-        assert contains(point),f"Prescribed base body missing in optimized STL: {body['id']}"
+        kind=shape["type"]
+        centre=body.get("seed",shape.get("center"))
+        if centre is None and "a" in shape and "b" in shape:
+            centre=[(shape["a"][k]+shape["b"][k])*.5 for k in range(3)]
+        if kind=="mesh":
+            path=(Path(scene_path).parent/shape["file"]).resolve()
+            raw=path.read_bytes()
+            if len(raw)>=84 and 84+50*struct.unpack_from("<I",raw,80)[0]==len(raw):
+                points=[]
+                num=struct.unpack_from("<I",raw,80)[0]
+                for i in range(num):
+                    off=84+i*50
+                    for j in range(3):
+                        points.append(struct.unpack_from("<fff",raw,off+12+j*12))
+            else:
+                points=[tuple(map(float,line.split()[1:])) for line in
+                        path.read_text(encoding="utf8").splitlines()
+                        if line.strip().startswith("vertex ")]
+            assert points,(path,"No vertices")
+            bounds_lo=[min(p[k] for p in points) for k in range(3)]
+            bounds_hi=[max(p[k] for p in points) for k in range(3)]
+            centre=centre or [(a+b)*.5 for a,b in zip(bounds_lo,bounds_hi)]
+            # The centroid is not a guaranteed interior point for every concave
+            # STL; complex fixtures should supply a known-inside seed.
+            offsets=[.13*(hi-lo) for lo,hi in zip(bounds_lo,bounds_hi)]
+        elif kind in ("sphere","box","ellipsoid","torus"):
+            assert centre is not None,body
+            if kind=="sphere":
+                offsets=[.22*shape["radius"]]*3
+            elif kind=="box":
+                offsets=[.22*v for v in shape["halfSize"]]
+            elif kind=="ellipsoid":
+                offsets=[.22*v for v in shape["radii"]]
+            else:
+                # Torus uses a point on the ring, not the central empty hole.
+                centre=[centre[0]+shape["majorRadius"],centre[1],centre[2]]
+                offsets=[.20*shape["minorRadius"]]*3
+        elif kind in ("capsule","cylinder"):
+            assert centre is not None,body
+            a,b=shape["a"],shape["b"]
+            return [centre,
+                    [(3*a[k]+b[k])*.25 for k in range(3)],
+                    [(a[k]+3*b[k])*.25 for k in range(3)]]
+        else:
+            assert centre is not None,(body["id"],"Explicit seed required to validate complex CSG")
+            return [centre]
+        result=[centre]
+        for axis in range(3):
+            for side in (-1,+1):
+                p=list(centre)
+                p[axis]+=side*offsets[axis]
+                result.append(p)
+        return result
+
+    checked=0;checked_points=0
+    for body in scene["bodies"]:
+        samples=fixture_samples(body)
+        assert samples,("Empty fixture samples",body["id"])
+        for point in samples:
+            assert contains(point),(
+                f"Prescribed base body '{body['id']}' loses interior point {point} "
+                "in optimized STL")
+            checked_points+=1
         checked+=1
-    assert checked>=2
+    assert checked==len(scene["bodies"])
     print("PASS FREE TOPOLOGY: maintained bodies",checked,
+          "sampled protected interior points",checked_points,
           "FVM variables",summary["variables"],"voids",summary["nucleatedVoidPatches"],
           "FEM reduction",f"{summary['volumeReductionPercent']:.3f}%",
           "binary VM",f"{summary['binaryMaximumVonMisesMpa']:.4f} MPa")
