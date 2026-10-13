@@ -1,0 +1,33 @@
+name: FVM projected free topology
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/free_topology_projection.json'
+      - 'experiments/FvmGenerativeDemo/FreeTopologyDesign.cs'
+      - 'experiments/FvmGenerativeDemo/UniversalScene.cs'
+      - '.github/workflows/fvm-projection-ci.yml'
+  workflow_dispatch:
+jobs:
+  projected-density:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Strict .NET 8 compile
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Optimize projected five M functional field with three-point FEM gradient verification
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_projection.json --iterations 3 --gradient-check --self-test --out output/projected
+      - name: Independently validate topology, keepout, mandatory fixtures and binary FEM
+        run: |
+          python experiments/FvmGenerativeDemo/validate_stl.py output/projected/initial.stl output/projected/optimized.stl
+          python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_projection.json output/projected
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: projected-five-M-free-topology
+          path: output/projected
+          if-no-files-found: warn
