@@ -12,6 +12,7 @@ on:
       - 'experiments/FvmGenerativeDemo/validate_stl.py'
       - 'experiments/FvmGenerativeDemo/validate_free_topology.py'
       - 'experiments/FvmGenerativeDemo/free_topology_6_bodies.json'
+      - 'experiments/FvmGenerativeDemo/free_topology_imported_stl.json'
       - 'experiments/FvmGenerativeDemo/free_topology_multiphysics.json'
       - '.github/workflows/fvm-free-topology-ci.yml'
   workflow_dispatch:
@@ -44,6 +45,12 @@ jobs:
         run: python experiments/FvmGenerativeDemo/validate_stl.py output/free-six/initial.stl output/free-six/optimized.stl
       - name: Independently verify six-body geometry, forbidden volumes and binary stress
         run: python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_6_bodies.json output/free-six
+      - name: Free FVM density topology with imported watertight binary STL as required fixture
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_imported_stl.json --iterations 3 --gradient-check --self-test --out output/free-imported-stl
+      - name: Independently verify imported STL fixture, clearance and one printable connected shell
+        run: |
+          python experiments/FvmGenerativeDemo/validate_stl.py output/free-imported-stl/initial.stl output/free-imported-stl/optimized.stl
+          python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_imported_stl.json output/free-imported-stl
       - uses: actions/upload-artifact@v4
         if: always()
         with:
