@@ -170,6 +170,8 @@ internal sealed class UniversalScene
     internal double MaxFatigueDamage {get;private set;}=1;
     internal int Iterations {get;private set;}=3;
     internal bool AutoTruss {get;private set;}=false;
+    // 0 disables density Heaviside projection; otherwise β sharpens material/void.
+    internal double ProjectionBeta {get;private set;}=0;
     internal double TrussOffsetMm {get;private set;}
     internal bool AssertDetour {get;private set;}=false;
     private static double Scalar(JsonElement e,string prop,double fallback)=>
@@ -239,6 +241,7 @@ internal sealed class UniversalScene
             BridgeRadius=Scalar(j,"bridgeRadiusMm",4),
             AvoidSafetyMm=Scalar(j,"surfaceSafetyMm",Math.Max(.25,Scalar(j,"fvmStepMm",3)*.3)),
             Iterations=Integer(j,"iterations",3),
+            ProjectionBeta=Scalar(j,"projectionBeta",0),
             AutoTruss=j.TryGetProperty("autoTruss",out var autoTruss)&&autoTruss.GetBoolean(),
             TrussOffsetMm=Scalar(j,"trussOffsetMm",Scalar(j,"bridgeRadiusMm",4)*1.4),
             AssertDetour=j.TryGetProperty("assertDetour",out var flag)&&flag.GetBoolean()
@@ -337,6 +340,7 @@ internal sealed class UniversalScene
         if(lengths.X<=0||lengths.Y<=0||lengths.Z<=0
            ||RouteStep<=0||FvmStep<=0||BridgeRadius<=0||TrussOffsetMm<=0||AvoidSafetyMm<0||Young<=0
            ||Poisson<=-1||Poisson>=.5||StressLimit<=0||DisplacementLimit<=0
+           ||ProjectionBeta<0||ProjectionBeta>20||!double.IsFinite(ProjectionBeta)
            ||Iterations<1||Iterations>20||ImpactPulseSeconds<=0||DampingRatio<0
            ||DampingRatio>1||DensityKgMm3<=0||ThermalConductivityWmK<=0
            ||ThermalExpansionPerK<0||ThermalHotK<=0||ThermalColdK<=0
