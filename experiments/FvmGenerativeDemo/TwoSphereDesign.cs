@@ -483,7 +483,7 @@ internal static class TwoSphereDesign
         return false;
     }
 
-    private static class SphereOutputs
+    internal static class SphereOutputs
     {
         internal static void Write(string root,State before,State after,SphereScene scene)
         {
@@ -571,12 +571,12 @@ internal static class TwoSphereDesign
             var d=Math.Sqrt(Dot(a,a));
             return d>1e-14?a*(1/d):new V(0,0,0);
         }
-        private static void WriteStl(string path,FunctionalVoxelModel model,SphereScene scene)
+        internal static void WriteStl(string path,FunctionalVoxelModel model,SphereScene? scene)
         {
             var grid=model.Grid;
-            int nx=scene.StandardGeometry?52:2*grid.Count(0);
-            int ny=scene.StandardGeometry?18:2*grid.Count(1);
-            int nz=scene.StandardGeometry?18:2*grid.Count(2);
+            int nx=scene?.StandardGeometry==true?52:2*grid.Count(0);
+            int ny=scene?.StandardGeometry==true?18:2*grid.Count(1);
+            int nz=scene?.StandardGeometry==true?18:2*grid.Count(2);
             var ox=grid.Minimum(0);var oy=grid.Minimum(1);var oz=grid.Minimum(2);
             var hx=grid.Count(0)*grid.Step(0)/nx;
             var hy=grid.Count(1)*grid.Step(1)/ny;
