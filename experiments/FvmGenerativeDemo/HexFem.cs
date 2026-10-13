@@ -4,7 +4,7 @@ namespace FvmGenerativeDemo;
 
 // All dimensions in mm, forces in N, Young's modulus and stress in N/mm²=MPa.
 // Standard trilinear 8-node displacement element, 2x2x2 Gauss integration.
-internal sealed class HexFem
+internal sealed partial class HexFem
 {
     private static readonly (int X, int Y, int Z)[] Corners =
     {
