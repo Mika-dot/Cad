@@ -22,6 +22,42 @@ internal static class MultiphysicsSelfTest
             "Static reference bar stress P/A");
         Check(Math.Abs(stat.ReactionXN+force)<1e-4,"Static force balance");
 
+        // True prescribed external-face pressure via consistent Hex8 surface
+        // quadrature, not force/number-of-volume-nodes. Test three grids and
+        // independent normal orientations with reaction equilibrium.
+        foreach(var divisions in new[]{4,8,16})
+        {
+            var pressureBar=new HexFem(divisions,2,2,0,0,0,
+                length/divisions,5,5,e,0,(_x,_y,_z)=>1,null,
+                loadN:0,interfaceHalfWidth:0,emin:1e-5,epsF:.1,
+                boundaryPressures:new[]{
+                    new HexBoundaryPressure("xmax",force/area)
+                });
+            var loaded=pressureBar.Solve();
+            Check(Math.Abs(loaded.ReactionXN+force)<1e-5,
+                "External face traction must balance total physical pressure * area");
+            Check(Math.Abs(loaded.MaxDisplacementMm-expected)<1e-6,
+                "True traction Hex8 rod u=pressure*length/E independent of mesh size");
+            Check(Math.Abs(loaded.MaxVonMisesMpa-force/area)<1e-3,
+                "True traction Hex8 von Mises agrees with uniform axial stress");
+            Console.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "FACE PRESSURE PASS: {0}x2x2 Hex8, p={1:G7} MPa, Fx={2:G7} N, reaction={3:G8} N, u={4:G8} mm",
+                divisions,force/area,force,loaded.ReactionXN,loaded.MaxDisplacementMm));
+        }
+        var allFaces=new HexFem(4,2,2,0,0,0,25,5,5,
+            e,0,(_x,_y,_z)=>1,null,
+            loadN:0,interfaceHalfWidth:0,emin:1e-5,epsF:.1,
+            boundaryPressures:new[]{
+                new HexBoundaryPressure("xmax",10), // +1000 N = 10 MPa * 100 mm²
+                new HexBoundaryPressure("ymax",1),  // +1000 N = 1 MPa * 1000 mm²
+                new HexBoundaryPressure("zmin",2)   // -2000 N = 2 MPa * 1000 mm²
+            });
+        var reactions=allFaces.Solve();
+        Check(Math.Abs(reactions.ReactionXN+1000)<1e-4 &&
+              Math.Abs(reactions.ReactionYN+1000)<1e-4 &&
+              Math.Abs(reactions.ReactionZN-2000)<1e-4,
+              "Mixed X/Y/Z surface pressures must balance all applied forces, including supported face nodes");
+
         var thermal=fem.ThermalConductance(45,
             (x,y,z)=>x>=length-1e-8,
             (x,y,z)=>x<=1e-8);
