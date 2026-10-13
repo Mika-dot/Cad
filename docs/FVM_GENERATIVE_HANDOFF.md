@@ -1,5 +1,37 @@
 # Быстрый вход — ФВМ + FEM + генеративное проектирование
 
+> **АКТУАЛЬНЫЙ РЕЗУЛЬТАТ 13.10.2026: УНИВЕРСАЛЬНЫЙ FVM/FEM GENERATOR.**
+> Предыдущие ограничения «только две сферы» уже исторические:
+> теперь реализован C# `--multi-scene` с **2–32 CSG или watertight STL
+> обязательными телами**, несколькими закреплениями и нагрузками,
+> `obstacles`/clearance, Dijkstra 3D маршрутизацией и независимой
+> M/direct-F FEM-приёмкой по нескольким физическим критериям.
+> Рабочий код: `UniversalScene.cs`, `ImplicitMesh.cs`,
+> `UniversalDesign.cs`, `HexFemMultiphysics.cs`,
+> `MultiphysicsSelfTest.cs`, `validate_keepouts.py`.
+> Подробности и точные команды:
+> [FVM_UNIVERSAL_MULTIPHYSICS_IMPLEMENTATION.md](FVM_UNIVERSAL_MULTIPHYSICS_IMPLEMENTATION.md).
+> Фактические результаты и ошибки:
+> [TASK_JOURNAL.md](../experiments/FvmGenerativeDemo/TASK_JOURNAL.md).
+>
+> **Численно подтверждено:** 
+> [Actions #38374129417](https://github.com/Mika-dot/Cad/actions/runs/38374129417)
+> (Windows+Linux+независимый Python FEM PASS);
+> 6 объектов и 2 forbidden regions: −6.68% регуляризованного FEM-объёма,
+> принудительный обход: −12.26%, импорт binary STL: −8.56%.
+> Пользовательские keepout clearances дополнительно
+> проверяются на экспортированной STL.
+> Физика: реальный static Hex8, first-mode eigensolve,
+> half-sine Newmark impulse, steady Fourier, thermoelastic,
+> одномодовая FRF и screening S–N Basquin.
+> Не реализованы STEP/BREP без STL, многоосный rainflow,
+> контактный удар, buckling, нелинейная thermo-mechanics,
+> глобально оптимальная topology.
+> ОЧЕНЬ ВАЖНО: не выдавать линейные приближённые расчёты
+> за сертифицированную безопасность. Не трогать исходные
+> ветки main / FEM_Voxel / functional-voxel-kernel.
+>
+
 
 > **Дополнение 13.10.2026:** предложена мультифизическая математика
 > [FVM_MULTIPHYSICS_GENERATIVE_DESIGN.md](FVM_MULTIPHYSICS_GENERATIVE_DESIGN.md):
