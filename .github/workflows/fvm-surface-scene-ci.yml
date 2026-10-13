@@ -10,6 +10,7 @@ on:
       - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
       - 'experiments/FvmGenerativeDemo/pressure_load_box_end.stl'
       - 'experiments/FvmGenerativeDemo/test_surface_pressure_scenes.py'
+      - 'experiments/FvmGenerativeDemo/validate_free_topology.py'
       - '.github/workflows/fvm-surface-scene-ci.yml'
   workflow_dispatch:
 jobs:
