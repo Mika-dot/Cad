@@ -87,7 +87,7 @@ def inspect_stl(filename,obstacles):
                     closest_clearance=min(closest_clearance,-raw_f-obstacle["clearanceMm"])
                     # Tolerance accounts for STL triangulation and finite M
                     # reconstruction. Actual occupied obstacle volume is never allowed.
-                    if -raw_f-obstacle["clearanceMm"] < -0.05:
+                    if -raw_f-obstacle["clearanceMm"] < -0.002:
                         raise AssertionError(
                             f"{filename}: STL violates required nominal clearance "
                             f"for {obstacle['id']} by {raw_f+obstacle['clearanceMm']:.4f} mm")
