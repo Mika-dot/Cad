@@ -38,9 +38,15 @@ jobs:
           python experiments/FvmGenerativeDemo/validate_stl.py output/pressure-scene/initial.stl output/pressure-scene/optimized.stl
           python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json output/pressure-scene/routes.csv output/pressure-scene/initial.stl output/pressure-scene/optimized.stl
           python -c "import json; s=json.load(open('output/pressure-scene/summary.json')); assert s['status']=='PASS' and s['savedVolumePercent']>0 and s['loadCases']==1; print('PASS optimization with STL pressure surface only')"
+      - name: Free 5M SIMP topology with automatically excavated external STL-pressure contact access
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --iterations 2 --gradient-check --self-test --out output/free-pressure
+      - name: Independently validate pressure-constrained free-density print geometry
+        run: |
+          python experiments/FvmGenerativeDemo/validate_stl.py output/free-pressure/initial.stl output/free-pressure/optimized.stl
+          python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json output/free-pressure
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: surface-pressure-multi-body-results-${{ matrix.os }}
-          path: output/pressure-scene
+          path: output/
           if-no-files-found: warn
