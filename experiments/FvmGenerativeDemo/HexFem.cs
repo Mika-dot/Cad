@@ -17,6 +17,9 @@ internal sealed partial class HexFem
     private static readonly double[] Gauss = { -0.5773502691896258, 0.5773502691896258 };
     private readonly List<Element> _elements = new();
     private readonly double[] _rhs, _diag;
+    // Loads applied to constrained DOFs remain part of physical reactions.
+    // The PCG RHS zeros those DOFs, but reaction = Ku - ORIGINAL force.
+    private readonly double[] _appliedRhs;
     private readonly bool[] _fixed;
     private readonly double[,] _elastic = new double[6,6];
     private readonly Func<double,double,double,double> _field;
@@ -135,6 +138,7 @@ internal sealed partial class HexFem
             _elements.Add(e);
             for(int a=0;a<24;a++) _diag[e.Id[a]]+=e.K[24*a+a];
         }
+        _appliedRhs=(double[])_rhs.Clone();
         for(int a=0;a<Dofs;a++)
         {
             if(_fixed[a]) { _rhs[a]=0; _diag[a]=1; }
@@ -295,7 +299,7 @@ internal sealed partial class HexFem
         double freeResidual2=0, reactionX=0, reactionY=0, reactionZ=0, compliance=0;
         for(int a=0;a<Dofs;a++)
         {
-            var error=ku[a]-_rhs[a];
+            var error=ku[a]-(_fixed[a]?_appliedRhs[a]:_rhs[a]);
             if(_fixed[a]) { if(a%3==0) reactionX+=error; else if(a%3==1) reactionY+=error; else reactionZ+=error; }
             else freeResidual2+=error*error;
             compliance+=_rhs[a]*u[a];
