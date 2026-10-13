@@ -183,3 +183,25 @@ buckling, STEP-BREP или полного нелинейного многопо�
 Проверенная сцена `multi_scene_auto_truss.json`: **6 CSG-объектов, 5 маршрутов, 10 самостоятельно построенных раскосов, 4 автоматически выведенные опорные точки, один принятый FEM-шаг**. Объём FEM −8.11%, STL −8.645%. Проверка Windows/Ubuntu/Python: [Actions #38379745918](https://github.com/Mika-dot/Cad/actions/runs/38379745918).
 
 Это инженерная эвристика начальной пространственной фермы, а НЕ полная свободная топологическая оптимизация SIMP/OC. `fixed` и внешние силы остаются инженерными граничными условиями, которые нужно задать явно, а не угадывать по геометрии.
+
+
+## Основной исследовательский режим: свободная топология ФВМ × FEM
+
+**Теперь не требуется рисовать ни одну соединительную балку**. При `--free-topology <scene.json>` начальный проектный объём определяется автоматически из bounding box, обязательных CSG/STL-тел и keepout-зон. Каждая свободная ячейка ФВМ получает собственную проектную переменную, а 3D Hex8/SIMP и OC изменяют форму вплоть до зарождения новых пустот. Итоговые STL, density.csv, metrics.csv, summary.json и опциональный mesh_refinement.json создаются из согласованной геометрии пяти M.
+
+В отличие от старого `--multi-scene --autoTruss`, новый режим **не задаёт предварительно граф фермы** и позволяет сформировать собственную топологию распределения материала. Реализовано не глобальное доказательство минимальной массы, а локальная плотностная оптимизация с FEM-обратной связью и проверкой условий.
+
+**Запуск** (из корня репозитория):
+
+```powershell
+dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology experiments/FvmGenerativeDemo/free_topology_3_bodies.json --iterations 3 --self-test --gradient-check --refinement-report --out output/free
+python experiments/FvmGenerativeDemo/validate_stl.py output/free/initial.stl output/free/optimized.stl
+python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_3_bodies.json output/free --require-void
+```
+
+**Документация математики:** [FVM_FREE_TOPOLOGY_SIMP_OC.md](../../docs/FVM_FREE_TOPOLOGY_SIMP_OC.md).
+
+**Численно проверено (Linux CI):** [run #38385288100](https://github.com/Mika-dot/Cad/actions/runs/38385288100): на 3 CSG-телах −21.65% FEM-объёма, на 6 CSG-телах −17.85%; созданы новые пустоты, экспортированные STL замкнуты и выдерживают требуемые зазоры до запретных областей. Градиент проверен через полный независимый пересчёт FEM в двух сдвинутых пяти-M геометриях (совпадение примерно до 1e-7 по относительной величине).
+
+Пока остаются ограничения: наложенные пользователем физические закрепления/силы, линейная упругость, ersatz-материал фоновой сетки, зависимость результата от шага FEM/FVM, отсутствие точного STEP/BREP (STL поддержан), глобально оптимальной формы, гарантированной печатаемости/прочности изделия. Существуют отдельные дополнительные проверки first-mode, impulse/Newmark, steady thermal, thermoelastic, harmonic и fatigue-screen; результаты этих режимов нельзя приравнивать к реальному контактному удару или промышленной сертификации.
