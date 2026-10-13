@@ -403,14 +403,16 @@ internal static class FreeTopologyDesign
                     (x,y,z)=>field.Value(new Point3(x,y,z)),useM?model:null,
                     loadN:0,interfaceHalfWidth:0,emin:1e-4,epsF:field.Eps,
                     support:Fixed,nodalForce:NodalLoad,
-                    densityKgMm3:scene.DensityKgMm3,simpPower:3);
+                    densityKgMm3:scene.DensityKgMm3,simpPower:3,
+                    trianglePressures:scene.PressureFor(name));
                 var solved=fem.Solve(maxIterations:3000);
                 Check(solved.RelativeEquilibriumResidual<1e-6,
                     $"FEM residual {name}");
+                var total=scene.AppliedForce(name,load);
                 foreach(var (force,react) in new[]{
-                    (load.Values.Sum(v=>v.X),solved.ReactionXN),
-                    (load.Values.Sum(v=>v.Y),solved.ReactionYN),
-                    (load.Values.Sum(v=>v.Z),solved.ReactionZN)})
+                    (total.X,solved.ReactionXN),
+                    (total.Y,solved.ReactionYN),
+                    (total.Z,solved.ReactionZN)})
                     Check(Math.Abs(force+react)<Math.Max(.1,Math.Abs(force)*.001),
                         $"FEM global reaction balance {name}");
                 cases.Add(new Case(name,fem,solved));
@@ -488,7 +490,8 @@ internal static class FreeTopologyDesign
                         state.Field.Eps*1.01:-state.Field.Eps*1.01,
                     model:null,loadN:0,interfaceHalfWidth:0,emin:1e-4,
                     epsF:state.Field.Eps,support:Fixed,nodalForce:Load,
-                    densityKgMm3:scene.DensityKgMm3,simpPower:1);
+                    densityKgMm3:scene.DensityKgMm3,simpPower:1,
+                    trianglePressures:scene.PressureFor(name));
                 var r=fem.Solve(maxIterations:3000);
                 Check(r.RelativeEquilibriumResidual<1e-6,
                     "Binary FEM numerical residual: "+name);
@@ -785,7 +788,7 @@ internal static class FreeTopologyDesign
                 Check(countsOnGrid.Values.All(v=>v>=2),
                     "Refined FEM lost required geometric fixture nodes.");
                 double v=0,vm=0,u=0;int loadCaseIndex=0;
-                foreach(var (_,loads) in scene.LoadCases)
+                foreach(var (name,loads) in scene.LoadCases)
                 {
                     (double X,double Y,double Z) ForceRefined(double x,double y,double z)
                     {
@@ -803,7 +806,8 @@ internal static class FreeTopologyDesign
                             ?current.Field.Eps*1.01:-current.Field.Eps*1.01,
                         model:null,loadN:0,interfaceHalfWidth:0,emin:1e-4,
                         epsF:current.Field.Eps,support:Fixed,nodalForce:ForceRefined,
-                        densityKgMm3:scene.DensityKgMm3,simpPower:1);
+                        densityKgMm3:scene.DensityKgMm3,simpPower:1,
+                        trianglePressures:scene.PressureFor(name));
                     var answer=extraFem.Solve(maxIterations:5000);
                     Check(answer.RelativeEquilibriumResidual<1e-6,
                         "Refined binary FEM solver residual");
