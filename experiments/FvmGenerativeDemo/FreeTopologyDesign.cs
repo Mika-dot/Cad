@@ -585,27 +585,45 @@ internal static class FreeTopologyDesign
                 // not just a difference of fields or element stiffness.
                 // Gradient is ∂compliance/∂raw_control through filter,
                 // local M hyperplanes and the equilibrium solve.
-                var index=Enumerable.Range(0,gC.Length)
-                    .Where(i=>!current.Field.Locked[i])
-                    .OrderByDescending(i=>Math.Abs(gC[i]))
-                    .First();
+                // Three spatially separated controls catch indexing, filter
+                // transpose and x/y/z local tangent-plane sign errors which
+                // a single high-sensitivity point might not expose.
+                var picked=new List<int>();
+                var grid=current.Field.Grid;
+                foreach(var index in Enumerable.Range(0,gC.Length)
+                    .Where(i=>!current.Field.Locked[i]&&
+                        Math.Abs(gV[i])>1e-5&&Math.Abs(gC[i])>1e-8)
+                    .OrderByDescending(i=>Math.Abs(gC[i])))
+                {
+                    if(picked.All(previous=>
+                        Math.Abs(grid.Index(index,0)-grid.Index(previous,0))+
+                        Math.Abs(grid.Index(index,1)-grid.Index(previous,1))+
+                        Math.Abs(grid.Index(index,2)-grid.Index(previous,2))>=3))
+                        picked.Add(index);
+                    if(picked.Count==3)break;
+                }
+                Check(picked.Count==3,
+                    "Not enough spatially separated active topology controls for rigorous FEM gradient checks.");
                 const double delta=.002;
-                var plus=(double[])current.Field.Controls.Clone();
-                var minus=(double[])current.Field.Controls.Clone();
-                plus[index]+=delta;minus[index]-=delta;
-                var high=Analyze(plus,true,false);
-                var low=Analyze(minus,true,false);
-                var numericalC=(high.Compliance-low.Compliance)/(2*delta);
-                var numericalV=(high.Volume-low.Volume)/(2*delta);
-                var errorC=Math.Abs(gC[index]-numericalC)/
-                    Math.Max(1e-8,Math.Abs(numericalC));
-                var errorV=Math.Abs(gV[index]-numericalV)/
-                    Math.Max(1e-8,Math.Abs(numericalV));
-                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                    "FREE GRADIENT: index={0} dC analytic={1:G12}, FD={2:G12}, rel={3:P3}, dV analytic={4:G12}, FD={5:G12}, rel={6:P3}",
-                    index,gC[index],numericalC,errorC,gV[index],numericalV,errorV));
-                Check(errorC<.12&&errorV<.08,
-                    $"FVM five-M adjoint failed direct compliance or volume finite difference: {errorC:P3}/{errorV:P3}");
+                foreach(var index in picked)
+                {
+                    var plus=(double[])current.Field.Controls.Clone();
+                    var minus=(double[])current.Field.Controls.Clone();
+                    plus[index]+=delta;minus[index]-=delta;
+                    var high=Analyze(plus,true,false);
+                    var low=Analyze(minus,true,false);
+                    var numericalC=(high.Compliance-low.Compliance)/(2*delta);
+                    var numericalV=(high.Volume-low.Volume)/(2*delta);
+                    var errorC=Math.Abs(gC[index]-numericalC)/
+                        Math.Max(1e-8,Math.Abs(numericalC));
+                    var errorV=Math.Abs(gV[index]-numericalV)/
+                        Math.Max(1e-8,Math.Abs(numericalV));
+                    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "FREE GRADIENT: index={0} dC analytic={1:G12}, FD={2:G12}, rel={3:P3}, dV analytic={4:G12}, FD={5:G12}, rel={6:P3}",
+                        index,gC[index],numericalC,errorC,gV[index],numericalV,errorV));
+                    Check(errorC<.12&&errorV<.08,
+                        $"FVM five-M adjoint failed gradient at cell {index}: {errorC:P3}/{errorV:P3}");
+                }
             }
             // Generalized OC update: minimize SIMP compliance with material
             // budget schedule. Unlike routing-radii gradients, there is one
