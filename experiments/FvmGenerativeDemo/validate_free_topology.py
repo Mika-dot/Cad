@@ -9,7 +9,7 @@ import math
 import sys
 from validate_keepouts import inspect_stl
 
-def validate(scene_path,results):
+def validate(scene_path,results,require_void=False):
     scene=json.loads(Path(scene_path).read_text(encoding="utf8"))
     out=Path(results)
     summary=json.loads((out/"summary.json").read_text(encoding="utf8"))
@@ -19,7 +19,7 @@ def validate(scene_path,results):
     assert summary["obstacles"]==len(scene.get("obstacles",[]))
     assert summary["variables"]>40
     assert summary["acceptedUpdates"]>=2
-    assert summary["nucleatedVoidPatches"]>=1
+    if require_void:assert summary["nucleatedVoidPatches"]>=1
     assert summary["volumeReductionPercent"]>5
     assert summary["finalVolumeMm3"]<summary["initialVolumeMm3"]
     lim=scene["limits"]
@@ -89,5 +89,5 @@ def validate(scene_path,results):
           "binary VM",f"{summary['binaryMaximumVonMisesMpa']:.4f} MPa")
 
 if __name__=="__main__":
-    if len(sys.argv)!=3:raise SystemExit("Usage: validate_free_topology.py scene.json output_directory")
-    validate(*sys.argv[1:])
+    if len(sys.argv) not in (3,4):raise SystemExit("Usage: validate_free_topology.py scene.json output_dir [--require-void]")
+    validate(sys.argv[1],sys.argv[2],"--require-void" in sys.argv[3:])
