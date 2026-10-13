@@ -1,0 +1,604 @@
+using System.Globalization;
+using System.Text.Json;
+using DCad.FunctionalVoxel;
+
+namespace FvmGenerativeDemo;
+
+// Free field-based topology: one material variable per FVM cell, not one radius per
+// route. The scalar field defines both the 5 M images and immersed Hex8 physics.
+// Adjoint gradients are back-propagated through Hermite M reconstruction,
+// multilinear control interpolation AND normalized density filter.
+internal sealed class FreeTopologyField
+{
+    internal readonly UniversalScene Scene;
+    internal readonly FunctionalGrid Grid;
+    internal readonly double[] Controls,Filtered;
+    internal readonly bool[] Locked;
+    internal readonly double Eps;
+    private readonly double _h;
+    private readonly Point3 _size;
+    internal int Variables => Controls.Length;
+
+    internal FreeTopologyField(UniversalScene scene,double[]? controls=null)
+    {
+        Scene=scene;
+        _size=scene.Max-scene.Min;
+        var count=new[]{(int)Math.Ceiling(_size.X/scene.FvmStep),
+            (int)Math.Ceiling(_size.Y/scene.FvmStep),(int)Math.Ceiling(_size.Z/scene.FvmStep)};
+        Grid=new FunctionalGrid(new[]{scene.Min.X,scene.Min.Y,scene.Min.Z},
+            new[]{_size.X/count[0],_size.Y/count[1],_size.Z/count[2]},count);
+        Eps=Math.Max(.75,scene.FvmStep*.5);
+        _h=.07*scene.FvmStep;
+        Controls=controls is null?Enumerable.Repeat(.90,Grid.CellCount).ToArray():(double[])controls.Clone();
+        if(Controls.Length!=Grid.CellCount)throw new ArgumentException("Incorrect topology control dimensions.");
+        Locked=new bool[Grid.CellCount];
+        for(int i=0;i<Locked.Length;i++)
+        {
+            var c=Grid.Centre(i);var p=new Point3(c[0],c[1],c[2]);
+            var body=scene.Bodies.Any(b=>b.Shape.F(p)>=-Grid.Step(0)*.15);
+            var edge=Math.Min(Math.Min(p.X-scene.Min.X,scene.Max.X-p.X),
+                Math.Min(Math.Min(p.Y-scene.Min.Y,scene.Max.Y-p.Y),
+                         Math.Min(p.Z-scene.Min.Z,scene.Max.Z-p.Z)));
+            var keep=scene.ObstDistance(p)<scene.AvoidSafetyMm+scene.FvmStep*.75;
+            if(body||edge<1.5*scene.FvmStep||keep)
+            {
+                Locked[i]=true;Controls[i]=body?.99:.01;
+            }
+            else Controls[i]=Math.Clamp(Controls[i],.01,.99);
+        }
+        Filtered=ApplyFilter(Controls);
+    }
+
+    private void FilterStencil(int id,Action<int,double> callback)
+    {
+        var x=Grid.Index(id,0);var y=Grid.Index(id,1);var z=Grid.Index(id,2);
+        double denom=0;
+        for(int dx=-1;dx<=1;dx++)for(int dy=-1;dy<=1;dy++)for(int dz=-1;dz<=1;dz++)
+        {
+            int xx=x+dx,yy=y+dy,zz=z+dz;
+            if(xx<0||yy<0||zz<0||xx>=Grid.Count(0)||yy>=Grid.Count(1)||zz>=Grid.Count(2))continue;
+            denom+=(dx==0?2:1)*(dy==0?2:1)*(dz==0?2:1);
+        }
+        for(int dx=-1;dx<=1;dx++)for(int dy=-1;dy<=1;dy++)for(int dz=-1;dz<=1;dz++)
+        {
+            int xx=x+dx,yy=y+dy,zz=z+dz;
+            if(xx<0||yy<0||zz<0||xx>=Grid.Count(0)||yy>=Grid.Count(1)||zz>=Grid.Count(2))continue;
+            var w=(dx==0?2:1)*(dy==0?2:1)*(dz==0?2:1)/denom;
+            callback(Grid.LinearIndex(xx,yy,zz),w);
+        }
+    }
+    private double[] ApplyFilter(double[] x)
+    {
+        var a=new double[x.Length];
+        for(int i=0;i<a.Length;i++)
+        {
+            var sum=0.0;
+            FilterStencil(i,(id,w)=>sum+=w*x[id]);
+            a[i]=sum;
+        }
+        return a;
+    }
+    private double[] FilterTranspose(double[] filteredGradient)
+    {
+        var a=new double[Variables];
+        for(int i=0;i<Variables;i++)
+            if(filteredGradient[i]!=0)
+                FilterStencil(i,(id,w)=>a[id]+=w*filteredGradient[i]);
+        return a;
+    }
+
+    // Exact linear derivative of interpolated filtered controls, including
+    // clamped boundary coordinates. No nearest-cell / checkerboard Jacobian.
+    internal void ControlWeights(Point3 p,Action<int,double> add)
+    {
+        var low=new int[3];var high=new int[3];var weight=new double[3];
+        for(int a=0;a<3;a++)
+        {
+            double c=a==0?p.X:a==1?p.Y:p.Z;
+            var u=(c-Grid.Minimum(a))/Grid.Step(a)-.5;
+            u=Math.Clamp(u,0,Grid.Count(a)-1);
+            low[a]=(int)Math.Floor(u);high[a]=Math.Min(low[a]+1,Grid.Count(a)-1);
+            weight[a]=u-low[a];
+        }
+        for(int mask=0;mask<8;mask++)
+        {
+            double w=1;var ids=new int[3];
+            for(int a=0;a<3;a++)
+            {
+                bool upper=(mask&(1<<a))!=0;
+                ids[a]=upper?high[a]:low[a];
+                w*=upper?weight[a]:1-weight[a];
+            }
+            if(w>0)add(Grid.LinearIndex(ids),w);
+        }
+    }
+    private double Density(Point3 p)
+    {
+        double density=0;
+        ControlWeights(p,(id,w)=>density+=w*Filtered[id]);
+        return density;
+    }
+    private double BaseMaterial(Point3 p)
+    {
+        var value=double.NegativeInfinity;
+        foreach(var b in Scene.Bodies)
+        {
+            var f=b.Shape.F(p);
+            // Fully occupied protected bodies: no optimizer freedom here.
+            if(f>0)f=Math.Max(f,Eps);
+            value=Math.Max(value,f);
+        }
+        return value;
+    }
+    private double Boundary(Point3 p)
+    {
+        var gap=Math.Min(Math.Min(p.X-Scene.Min.X,Scene.Max.X-p.X),
+            Math.Min(Math.Min(p.Y-Scene.Min.Y,Scene.Max.Y-p.Y),
+                Math.Min(p.Z-Scene.Min.Z,Scene.Max.Z-p.Z)));
+        return gap-Eps*1.20;
+    }
+    internal double Value(Point3 p)
+    {
+        var f=2*Eps*(Density(p)-.5);
+        f=Math.Max(f,BaseMaterial(p));
+        f=Math.Min(f,Boundary(p));
+        foreach(var o in Scene.Obstacles)
+            f=Math.Min(f,-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm);
+        return f;
+    }
+    private bool DesignIsActive(Point3 p)
+    {
+        var top=2*Eps*(Density(p)-.5);
+        if(BaseMaterial(p)>=top||Boundary(p)<=top)return false;
+        foreach(var o in Scene.Obstacles)
+            if(-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm<=top)return false;
+        return true;
+    }
+    internal FunctionalVoxelModel Sample()
+    {
+        var field=FunctionalField.Analytic(3,point=>
+        {
+            var p=new Point3(point[0],point[1],point[2]);
+            var value=Value(p);
+            var gx=(Value(p+new Point3(_h,0,0))-Value(p-new Point3(_h,0,0)))/(2*_h);
+            var gy=(Value(p+new Point3(0,_h,0))-Value(p-new Point3(0,_h,0)))/(2*_h);
+            var gz=(Value(p+new Point3(0,0,_h))-Value(p-new Point3(0,0,_h)))/(2*_h);
+            return FunctionalJet.FromValueGradient(value,new[]{gx,gy,gz});
+        });
+        return FunctionalVoxelModel.Sample(field,Grid);
+    }
+    private void FieldTranspose(Point3 p,double scale,double[] gradient)
+    {
+        if(scale==0||!DesignIsActive(p))return;
+        ControlWeights(p,(id,w)=>gradient[id]+=scale*2*Eps*w);
+    }
+    // Adjoint chain through M interpolation and all 3 sampled gradients.
+    // ReconstructJet is an affine tangent at each sampled centre, despite
+    // homogeneous normal normalization of the stored five M planes.
+    internal double[] BackpropagateM(IReadOnlyList<(Point3 Point,double Coefficient)> gauss)
+    {
+        var smoothGradient=new double[Variables];
+        foreach(var (point,coefficient) in gauss)
+        {
+            if(coefficient==0)continue;
+            var lo=new int[3];var hi=new int[3];var t=new double[3];
+            for(int a=0;a<3;a++)
+            {
+                var c=a==0?point.X:a==1?point.Y:point.Z;
+                var x=(c-Grid.Minimum(a))/Grid.Step(a)-.5;
+                x=Math.Clamp(x,0,Grid.Count(a)-1);
+                lo[a]=(int)Math.Floor(x);hi[a]=Math.Min(lo[a]+1,Grid.Count(a)-1);
+                t[a]=x-lo[a];
+            }
+            for(int corner=0;corner<8;corner++)
+            {
+                var idx=new int[3];var w=coefficient;
+                for(int a=0;a<3;a++)
+                {
+                    bool upper=(corner&(1<<a))!=0;
+                    idx[a]=upper?hi[a]:lo[a];
+                    w*=upper?t[a]:1-t[a];
+                }
+                if(w==0)continue;
+                var centre=Grid.Centre(Grid.LinearIndex(idx));
+                var p=new Point3(centre[0],centre[1],centre[2]);
+                FieldTranspose(p,w,smoothGradient);
+                var offset=point-p;
+                foreach(var (positive,negative,d) in new[]{
+                    (new Point3(_h,0,0),new Point3(-_h,0,0),offset.X),
+                    (new Point3(0,_h,0),new Point3(0,-_h,0),offset.Y),
+                    (new Point3(0,0,_h),new Point3(0,0,-_h),offset.Z)})
+                {
+                    if(d==0)continue;
+                    var slope=w*d/(2*_h);
+                    FieldTranspose(p+positive,slope,smoothGradient);
+                    FieldTranspose(p+negative,-slope,smoothGradient);
+                }
+            }
+        }
+        var raw=FilterTranspose(smoothGradient);
+        for(int i=0;i<Variables;i++)if(Locked[i])raw[i]=0;
+        return raw;
+    }
+    internal int MaterialCentreCount(FunctionalVoxelModel model)
+    {
+        int count=0;
+        for(int i=0;i<Grid.CellCount;i++)if(model.ValueAtCentre(i)>0)count++;
+        return count;
+    }
+}
+
+internal static class FreeTopologyDesign
+{
+    private sealed record Case(string Name,HexFem Fem,FemResults Result);
+    private sealed class State
+    {
+        internal required FreeTopologyField Field;
+        internal required FunctionalVoxelModel M;
+        internal required Case[] Cases;
+        internal required bool FromM;
+        internal double Volume=>Cases[0].Result.VolumeMm3;
+        internal double Compliance=>Cases.Average(x=>x.Result.ComplianceNmm);
+        internal double Stress=>Cases.Max(x=>x.Result.MaxVonMisesMpa);
+        internal double Displacement=>Cases.Max(x=>x.Result.MaxDisplacementMm);
+        internal double FirstHz=double.NaN,ImpactMm=double.NaN,ImpactStress=double.NaN;
+        internal double Thermal=double.NaN,ThermalStress=double.NaN,ThermalU=double.NaN;
+        internal double Harmonic=double.NaN,Fatigue=double.NaN;
+    }
+    private static void Check(bool p,string message)
+    {
+        if(!p)throw new InvalidOperationException("FREE TOPOLOGY FAIL: "+message);
+    }
+    private static string Arg(string[] a,string key,string fallback)
+    {
+        for(int i=0;i<a.Length-1;i++)if(a[i]==key)return a[i+1];
+        return fallback;
+    }
+    private static bool Connected(State s,UniversalScene scene)
+    {
+        var g=s.Field.Grid;var solid=new bool[g.CellCount];
+        var seeds=new Queue<int>();var visited=new bool[g.CellCount];
+        var root=scene.Bodies.First(b=>b.Role=="fixed");
+        for(int i=0;i<solid.Length;i++)
+        {
+            var x=g.Centre(i);var p=new Point3(x[0],x[1],x[2]);
+            solid[i]=(s.FromM?s.M.ValueAtCentre(i):s.Field.Value(p))>0;
+            if(solid[i]&&root.Shape.F(p)>=0){seeds.Enqueue(i);visited[i]=true;}
+        }
+        if(seeds.Count==0)return false;
+        var found=new HashSet<string>();
+        while(seeds.Count>0)
+        {
+            int id=seeds.Dequeue();var c=g.Centre(id);
+            var p=new Point3(c[0],c[1],c[2]);
+            foreach(var body in scene.Bodies)if(body.Shape.F(p)>=0)found.Add(body.Id);
+            for(int a=0;a<3;a++)for(int delta=-1;delta<=1;delta+=2)
+            {
+                var ind=new[]{g.Index(id,0),g.Index(id,1),g.Index(id,2)};
+                ind[a]+=delta;
+                if(ind[a]<0||ind[a]>=g.Count(a))continue;
+                int next=g.LinearIndex(ind);
+                if(solid[next]&&!visited[next]){visited[next]=true;seeds.Enqueue(next);}
+            }
+        }
+        return found.Count==scene.Bodies.Count;
+    }
+    private static bool Feasible(State s,UniversalScene scene,double maxCompliance)
+    {
+        if(!double.IsFinite(s.Volume)||!double.IsFinite(s.Compliance)||
+           !Connected(s,scene)||
+           s.Stress>scene.StressLimit||s.Displacement>scene.DisplacementLimit||
+           s.Compliance>maxCompliance)return false;
+        if(scene.MinFrequencyHz>0&&!(s.FirstHz>=scene.MinFrequencyHz))return false;
+        if(double.IsFinite(scene.MaxImpactDisplacementMm)&&
+           !(s.ImpactMm<=scene.MaxImpactDisplacementMm))return false;
+        if(double.IsFinite(scene.MaxImpactVonMisesMpa)&&
+           !(s.ImpactStress<=scene.MaxImpactVonMisesMpa))return false;
+        if(scene.MinThermalConductanceWPerK>0&&
+           !(s.Thermal>=scene.MinThermalConductanceWPerK))return false;
+        if(scene.ThermalExpansionPerK>0&&
+           !(s.ThermalStress<=scene.MaxThermalStressMpa&&s.ThermalU<=scene.MaxThermalDisplacementMm))
+           return false;
+        if(scene.HarmonicFrequencyHz>=0&&
+           !(s.Harmonic<=scene.MaxHarmonicDisplacementMm))return false;
+        if(scene.FatigueCycles>0&&!(s.Fatigue<=scene.MaxFatigueDamage))return false;
+        return true;
+    }
+
+    internal static int Run(string[] args)
+    {
+        var path=Arg(args,"--free-topology","");
+        if(string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Usage --free-topology scene.json");
+        var scene=UniversalScene.Load(path);
+        int steps=int.Parse(Arg(args,"--iterations",scene.Iterations.ToString(CultureInfo.InvariantCulture)),
+            CultureInfo.InvariantCulture);
+        if(steps<1||steps>40)throw new ArgumentException("Iterations must be 1..40");
+        var outDir=Arg(args,"--out","output/free-topology");
+        Directory.CreateDirectory(outDir);
+        var origin=scene.Min;var size=scene.Max-scene.Min;
+        var nx=scene.FemCells[0];var ny=scene.FemCells[1];var nz=scene.FemCells[2];
+        var hx=size.X/nx;var hy=size.Y/ny;var hz=size.Z/nz;
+        var nodes=new List<Point3>();
+        for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+            nodes.Add(new Point3(origin.X+i*hx,origin.Y+j*hy,origin.Z+k*hz));
+        bool Fixed(double x,double y,double z)
+        {
+            var p=new Point3(x,y,z);
+            return scene.Bodies.Any(b=>b.Role=="fixed"&&b.Shape.F(p)>=0);
+        }
+        var counts=scene.Bodies.ToDictionary(b=>b.Id,
+            b=>nodes.Count(p=>b.Shape.F(p)>=0));
+        foreach(var (id,count) in counts)Check(count>=2,
+            $"Boundary body '{id}' has fewer than 2 nodes. Refine femCells.");
+        Check(nodes.Count(p=>Fixed(p.X,p.Y,p.Z))>=3,"No FEM support nodes");
+        foreach(var (name,forces) in scene.LoadCases)
+            foreach(var (id,v) in forces)
+            {
+                var body=scene.Bodies.First(b=>b.Id==id);
+                Check(!nodes.Any(p=>Fixed(p.X,p.Y,p.Z)&&body.Shape.F(p)>=0),
+                    $"Load '{name}/{id}' overlaps fixed nodes");
+            }
+        var start=new FreeTopologyField(scene);
+        int free=start.Locked.Count(x=>!x);
+        Check(free>=24,"FVM design domain too small for free topology optimization.");
+
+        State Analyze(double[] density,bool useM,bool additional)
+        {
+            var field=new FreeTopologyField(scene,density);
+            var model=field.Sample();
+            var cases=new List<Case>();
+            foreach(var (name,load) in scene.LoadCases)
+            {
+                (double X,double Y,double Z) NodalLoad(double x,double y,double z)
+                {
+                    var p=new Point3(x,y,z);var sum=new Point3(0,0,0);
+                    foreach(var (id,value) in load)
+                    {
+                        var body=scene.Bodies.First(b=>b.Id==id);
+                        if(body.Shape.F(p)>=0)sum+=value*(1.0/counts[id]);
+                    }
+                    return(sum.X,sum.Y,sum.Z);
+                }
+                var fem=new HexFem(nx,ny,nz,origin.X,origin.Y,origin.Z,
+                    hx,hy,hz,scene.Young,scene.Poisson,
+                    (x,y,z)=>field.Value(new Point3(x,y,z)),useM?model:null,
+                    loadN:0,interfaceHalfWidth:0,emin:1e-4,epsF:field.Eps,
+                    support:Fixed,nodalForce:NodalLoad,
+                    densityKgMm3:scene.DensityKgMm3,simpPower:3);
+                var solved=fem.Solve(maxIterations:3000);
+                Check(solved.RelativeEquilibriumResidual<1e-6,
+                    $"FEM residual {name}");
+                foreach(var (force,react) in new[]{
+                    (load.Values.Sum(v=>v.X),solved.ReactionXN),
+                    (load.Values.Sum(v=>v.Y),solved.ReactionYN),
+                    (load.Values.Sum(v=>v.Z),solved.ReactionZN)})
+                    Check(Math.Abs(force+react)<Math.Max(.1,Math.Abs(force)*.001),
+                        $"FEM global reaction balance {name}");
+                cases.Add(new Case(name,fem,solved));
+            }
+            var state=new State{Field=field,M=model,Cases=cases.ToArray(),FromM=useM};
+            if(additional)
+            {
+                if(scene.MinFrequencyHz>0||scene.HarmonicFrequencyHz>=0)
+                    state.FirstHz=cases[0].Fem.FirstNaturalFrequency(scene.DensityKgMm3).FrequencyHz;
+                if(scene.HarmonicFrequencyHz>=0)
+                    state.Harmonic=cases.Max(c=>c.Fem.HarmonicFirstModeMaxDisplacement(
+                        scene.DensityKgMm3,scene.HarmonicFrequencyHz,scene.DampingRatio));
+                if(double.IsFinite(scene.MaxImpactDisplacementMm)||
+                   double.IsFinite(scene.MaxImpactVonMisesMpa))
+                {
+                    var p=cases.Select(c=>c.Fem.SolvePulse(scene.DensityKgMm3,
+                        scene.ImpactPulseSeconds,scene.ImpactMultiplier,scene.DampingRatio)).ToArray();
+                    state.ImpactMm=p.Max(q=>q.MaxDisplacementMm);
+                    state.ImpactStress=p.Max(q=>q.MaxVonMisesMpa);
+                }
+                if(scene.MinThermalConductanceWPerK>0||scene.ThermalExpansionPerK>0)
+                {
+                    var hot=scene.Bodies.First(b=>b.Id==scene.ThermalHotId);
+                    var cold=scene.Bodies.First(b=>b.Id==scene.ThermalColdId);
+                    var temp=cases[0].Fem.ThermalConductance(scene.ThermalConductivityWmK,
+                        (x,y,z)=>hot.Shape.F(new Point3(x,y,z))>=0,
+                        (x,y,z)=>cold.Shape.F(new Point3(x,y,z))>=0);
+                    state.Thermal=temp.ConductanceWPerK;
+                    if(scene.ThermalExpansionPerK>0)
+                    {
+                        var t=cases[0].Fem.SolveThermoElastic(temp,
+                            scene.ThermalExpansionPerK,scene.ThermalColdK,
+                            scene.ThermalHotK,scene.ThermalReferenceK);
+                        Check(t.RelativeResidual<1e-5,"Thermoelastic residual");
+                        state.ThermalStress=t.MaxVonMisesMpa;
+                        state.ThermalU=t.MaxDisplacementMm;
+                    }
+                }
+                if(scene.FatigueCycles>0)
+                {
+                    var n=scene.FatigueReferenceCycles*Math.Pow(
+                        scene.FatigueReferenceStressMpa/Math.Max(1e-9,state.Stress),
+                        scene.FatigueExponent);
+                    state.Fatigue=scene.FatigueCycles/n;
+                }
+            }
+            return state;
+        }
+
+        var initial=Analyze(start.Controls,true,true);
+        var initialDirect=Analyze(start.Controls,false,true);
+        var maxCompliance=initial.Compliance*2.5;
+        Check(Feasible(initial,scene,maxCompliance)&&Feasible(initialDirect,scene,maxCompliance),
+            "Initial design fails physics, connectivity, or selected load limits.");
+        var current=initial;
+        int accepted=0,nucleated=0;
+        var metrics=new List<string>{"iteration,kind,volume_mm3,compliance_nmm,von_mises_mpa,displacement_mm,solid_m_centres,accepted"};
+        void Report(int iteration,string kind,State s)
+        {
+            string d(double x)=>x.ToString("G17",CultureInfo.InvariantCulture);
+            metrics.Add(string.Join(",",new[]{
+                iteration.ToString(CultureInfo.InvariantCulture),kind,d(s.Volume),
+                d(s.Compliance),d(s.Stress),d(s.Displacement),
+                s.Field.MaterialCentreCount(s.M).ToString(CultureInfo.InvariantCulture),"true"}));
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "FREE {0} {1}: V={2:F2}mm3 compliance={3:F3} Nmm VM={4:F2}MPa u={5:F5}mm solidCells={6}",
+                iteration,kind,s.Volume,s.Compliance,s.Stress,s.Displacement,
+                s.Field.MaterialCentreCount(s.M)));
+        }
+        Report(0,"initial",current);
+        // Keep an unchanged initial STL for comparison against the resulting
+        // independent free-field topological design.
+        TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"initial.stl"),initial.M,null);
+        for(int iteration=1;iteration<=steps;iteration++)
+        {
+            var gC=new double[current.Field.Variables];
+            var gV=new double[gC.Length];
+            for(int loadIndex=0;loadIndex<current.Cases.Length;loadIndex++)
+            {
+                var c=current.Cases[loadIndex];
+                var q=c.Fem.GaussSensitivities(c.Result);
+                var compliance=current.Field.BackpropagateM(q.Select(x=>
+                    (new Point3(x.X,x.Y,x.Z),x.DComplianceDField/current.Cases.Length)).ToArray());
+                for(int i=0;i<gC.Length;i++)gC[i]+=compliance[i];
+                if(loadIndex==0)
+                    gV=current.Field.BackpropagateM(q.Select(x=>
+                        (new Point3(x.X,x.Y,x.Z),x.DVolumeDField)).ToArray());
+            }
+            // Generalized OC update: minimize SIMP compliance with material
+            // budget schedule. Unlike routing-radii gradients, there is one
+            // variable for every non-protected M control cell.
+            var old=current.Field.Controls;
+            var targetMass=old.Sum()-free*.075;
+            var move=.20;
+            var candidate=new double[old.Length];
+            var lo=1e-12;var hi=1e12;
+            for(int k=0;k<65;k++)
+            {
+                var lambda=Math.Sqrt(lo*hi);
+                for(int i=0;i<candidate.Length;i++)
+                {
+                    if(current.Field.Locked[i]){candidate[i]=old[i];continue;}
+                    var ratio=Math.Max(1e-12,-gC[i]/
+                        Math.Max(1e-9,gV[i]*lambda));
+                    candidate[i]=Math.Clamp(old[i]*Math.Sqrt(ratio),
+                        Math.Max(.01,old[i]-move),
+                        Math.Min(.99,old[i]+move));
+                }
+                if(candidate.Sum()>targetMass)lo=lambda;else hi=lambda;
+            }
+            bool found=false;
+            for(double blend=1;blend>=.0625;blend*=.5)
+            {
+                var trialControls=new double[old.Length];
+                for(int i=0;i<old.Length;i++)
+                    trialControls[i]=old[i]+blend*(candidate[i]-old[i]);
+                try
+                {
+                    var trial=Analyze(trialControls,true,true);
+                    if(trial.Volume>current.Volume-.15||!Feasible(trial,scene,maxCompliance))continue;
+                    var direct=Analyze(trialControls,false,true);
+                    if(!Feasible(direct,scene,maxCompliance))continue;
+                    current=trial;accepted++;found=true;
+                    Report(iteration,"OC",trial);break;
+                }
+                catch(ArithmeticException){/* failed FEM = rejected step */ }
+            }
+            if(!found)
+            {
+                Console.WriteLine("FREE STOP: OC cannot find a lighter fully feasible topology.");
+                break;
+            }
+
+            // Explicit topology change: a low-energy 3x3x3 patch is allowed
+            // to turn into a void, even if no pre-existing routing path covers
+            // it. Only its FEM / CSG / multi-physics-validated result is kept.
+            // This is actual void nucleation, not thinning a predefined beam.
+            var choices=Enumerable.Range(0,current.Field.Variables)
+                .Where(i=>!current.Field.Locked[i]&&
+                    current.Field.Grid.Index(i,0)>2&&
+                    current.Field.Grid.Index(i,1)>2&&
+                    current.Field.Grid.Index(i,2)>2&&
+                    current.Field.Grid.Index(i,0)<current.Field.Grid.Count(0)-3&&
+                    current.Field.Grid.Index(i,1)<current.Field.Grid.Count(1)-3&&
+                    current.Field.Grid.Index(i,2)<current.Field.Grid.Count(2)-3)
+                .OrderBy(i=>Math.Abs(gC[i])/(Math.Abs(gV[i])+1e-8))
+                .Take(8).ToArray();
+            foreach(var centre in choices)
+            {
+                var g=current.Field.Grid;
+                var x=g.Index(centre,0);var y=g.Index(centre,1);var z=g.Index(centre,2);
+                var nucleatedControls=(double[])current.Field.Controls.Clone();
+                int n=0;
+                for(int dx=-1;dx<=1;dx++)for(int dy=-1;dy<=1;dy++)
+                    for(int dz=-1;dz<=1;dz++)
+                    {
+                        var id=g.LinearIndex(x+dx,y+dy,z+dz);
+                        if(current.Field.Locked[id])continue;
+                        nucleatedControls[id]=.01;n++;
+                    }
+                if(n<20)continue;
+                try
+                {
+                    var trial=Analyze(nucleatedControls,true,true);
+                    if(trial.Field.Value(new Point3(g.Centre(centre)[0],
+                        g.Centre(centre)[1],g.Centre(centre)[2]))>=0)continue;
+                    if(trial.Volume>current.Volume-.15||!Feasible(trial,scene,maxCompliance))continue;
+                    var direct=Analyze(nucleatedControls,false,true);
+                    if(!Feasible(direct,scene,maxCompliance))continue;
+                    current=trial;accepted++;nucleated++;
+                    Report(iteration,"new-void",trial);break;
+                }
+                catch(ArithmeticException){/* reject */ }
+            }
+        }
+        var finalDirect=Analyze(current.Field.Controls,false,true);
+        Check(Feasible(current,scene,maxCompliance)&&Feasible(finalDirect,scene,maxCompliance),
+            "Final FEM/multi-physics or direct F violates constraints.");
+        File.WriteAllLines(Path.Combine(outDir,"metrics.csv"),metrics);
+        TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"optimized.stl"),current.M,null);
+        using(var writer=new StreamWriter(Path.Combine(outDir,"density.csv")))
+        {
+            writer.WriteLine("cell,x_mm,y_mm,z_mm,raw_density,filtered_density,locked");
+            for(int i=0;i<current.Field.Variables;i++)
+            {
+                var c=current.Field.Grid.Centre(i);
+                writer.WriteLine(string.Join(",",new[]{
+                    i.ToString(CultureInfo.InvariantCulture),
+                    c[0].ToString("G17",CultureInfo.InvariantCulture),
+                    c[1].ToString("G17",CultureInfo.InvariantCulture),
+                    c[2].ToString("G17",CultureInfo.InvariantCulture),
+                    current.Field.Controls[i].ToString("G17",CultureInfo.InvariantCulture),
+                    current.Field.Filtered[i].ToString("G17",CultureInfo.InvariantCulture),
+                    current.Field.Locked[i].ToString()}));
+            }
+        }
+        var summary=new{
+            mode="free-topology-fvm-simp-oc",scene=Path.GetFileName(path),
+            inputBodies=scene.Bodies.Count,obstacles=scene.Obstacles.Count,
+            variables=free,initialVolumeMm3=initial.Volume,finalVolumeMm3=current.Volume,
+            volumeReductionPercent=(1-current.Volume/initial.Volume)*100,
+            acceptedUpdates=accepted,nucleatedVoidPatches=nucleated,
+            complianceNmm=current.Compliance,
+            maximumVonMisesMpa=current.Stress,maximumDisplacementMm=current.Displacement,
+            directFVolumeMm3=finalDirect.Volume,
+            firstFrequencyHz=double.IsFinite(current.FirstHz)?current.FirstHz:(double?)null,
+            worstImpactMm=double.IsFinite(current.ImpactMm)?current.ImpactMm:(double?)null,
+            worstImpactStressMpa=double.IsFinite(current.ImpactStress)?current.ImpactStress:(double?)null,
+            thermalConductanceWPerK=double.IsFinite(current.Thermal)?current.Thermal:(double?)null,
+            thermoelasticStressMpa=double.IsFinite(current.ThermalStress)?current.ThermalStress:(double?)null,
+            harmonicFirstModeMm=double.IsFinite(current.Harmonic)?current.Harmonic:(double?)null,
+            fatigueDamageScreening=double.IsFinite(current.Fatigue)?current.Fatigue:(double?)null,
+            caveat="regularized SIMP ersatz Hex8 and five M, not certified exact-boundary FEM",
+            status="PASS"
+        };
+        File.WriteAllText(Path.Combine(outDir,"summary.json"),JsonSerializer.Serialize(summary,
+            new JsonSerializerOptions{WriteIndented=true}));
+        if(args.Contains("--self-test"))
+        {
+            Check(accepted>0,"No successful free-field design update.");
+            Check(current.Volume<initial.Volume,"No actual volume reduction");
+        }
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "FREE TOPOLOGY PASS: {0} controls ({1} free), {2} approved updates, {3} new voids, V reduction {4:F3}%, output={5}",
+            current.Field.Variables,free,accepted,nucleated,
+            summary.volumeReductionPercent,outDir));
+        return 0;
+    }
+}
