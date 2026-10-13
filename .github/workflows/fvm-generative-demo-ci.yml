@@ -41,6 +41,10 @@ jobs:
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --two-spheres --scene experiments/FvmGenerativeDemo/two_spheres_example.json --iterations 3 --out experiments/FvmGenerativeDemo/output/configured-spheres
       - name: Validate user-configured solid STL
         run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/configured-spheres/initial.stl experiments/FvmGenerativeDemo/output/configured-spheres/optimized.stl
+      - name: Multi-terminal CSG FVM-FEM thermal modal impact integration
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_6_bodies.json --iterations 1 --self-test --out experiments/FvmGenerativeDemo/output/multi-6
+      - name: Validate connected, watertight multi-terminal STL
+        run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/multi-6/initial.stl experiments/FvmGenerativeDemo/output/multi-6/optimized.stl
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
