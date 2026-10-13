@@ -205,3 +205,21 @@ python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGe
 **Численно проверено (Linux CI):** [run #38385288100](https://github.com/Mika-dot/Cad/actions/runs/38385288100): на 3 CSG-телах −21.65% FEM-объёма, на 6 CSG-телах −17.85%; созданы новые пустоты, экспортированные STL замкнуты и выдерживают требуемые зазоры до запретных областей. Градиент проверен через полный независимый пересчёт FEM в двух сдвинутых пяти-M геометриях (совпадение примерно до 1e-7 по относительной величине).
 
 Пока остаются ограничения: наложенные пользователем физические закрепления/силы, линейная упругость, ersatz-материал фоновой сетки, зависимость результата от шага FEM/FVM, отсутствие точного STEP/BREP (STL поддержан), глобально оптимальной формы, гарантированной печатаемости/прочности изделия. Существуют отдельные дополнительные проверки first-mode, impulse/Newmark, steady thermal, thermoelastic, harmonic и fatigue-screen; результаты этих режимов нельзя приравнивать к реальному контактному удару или промышленной сертификации.
+
+
+### FEM-сходимость и предупреждение для реального производства
+
+```powershell
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology experiments/FvmGenerativeDemo/free_topology_multiphysics.json --iterations 1 --gradient-check --refinement-report --out output/validated
+
+# Строгий режим: отказ при недоказанной сходимости
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology experiments/FvmGenerativeDemo/free_topology_multiphysics.json --iterations 1 --refinement-report --require-mesh-convergence --out output/strict
+```
+
+В первом случае создаётся `mesh_refinement.json` с
+тремя сетками и процентами изменения. Во втором на текущей
+грубой тестовой сцене система **должна отказать**:
+максимальное напряжение менялось на +35.03% и +13.69%
+при последовательных уточнениях. Это не ошибка компиляции,
+а нормальная проверка достоверности. Ни один данный PASS
+не подтверждает промышленную безопасность изделия.
