@@ -143,7 +143,7 @@ internal sealed class FreeTopologyField
         f=Math.Max(f,BaseMaterial(p));
         f=Math.Min(f,Boundary(p));
         foreach(var o in Scene.Obstacles)
-            f=Math.Min(f,-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm);
+            f=Math.Min(f,-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm-0.20*Scene.FvmStep);
         return f;
     }
     private bool DesignIsActive(Point3 p)
@@ -151,7 +151,7 @@ internal sealed class FreeTopologyField
         var top=2*Eps*(Density(p)-.5);
         if(BaseMaterial(p)>=top||Boundary(p)<=top)return false;
         foreach(var o in Scene.Obstacles)
-            if(-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm<=top)return false;
+            if(-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm-0.20*Scene.FvmStep<=top)return false;
         return true;
     }
     internal FunctionalVoxelModel Sample()
