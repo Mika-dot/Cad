@@ -533,8 +533,18 @@ internal static class FreeTopologyDesign
         var initial=Analyze(start.Controls,true,true);
         var initialDirect=Analyze(start.Controls,false,true);
         var maxCompliance=initial.Compliance*2.5;
+        void Diagnostics(string name,State st)
+        {
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "FREE PHYSICS {0}: M={1} VM={2:F3} u={3:F6} C={4:F5} connected={5} f1={6:G7}Hz impulse={7:G7}mm/{8:G7}MPa thermal={9:G7}W/K thermo={10:G7}MPa/{11:G7}mm harmonic={12:G7}mm fatigue={13:G7}",
+                name,st.FromM,st.Stress,st.Displacement,st.Compliance,
+                Connected(st,scene),st.FirstHz,st.ImpactMm,st.ImpactStress,
+                st.Thermal,st.ThermalStress,st.ThermalU,st.Harmonic,st.Fatigue));
+        }
+        Diagnostics("initial-five-M",initial);
+        Diagnostics("initial-direct-F",initialDirect);
         Check(Feasible(initial,scene,maxCompliance)&&Feasible(initialDirect,scene,maxCompliance),
-            "Initial design fails physics, connectivity, or selected load limits.");
+            "Initial design fails physics, connectivity, or selected load limits; see FREE PHYSICS.");
         var current=initial;
         int accepted=0,nucleated=0;
         var metrics=new List<string>{"iteration,kind,volume_mm3,compliance_nmm,von_mises_mpa,displacement_mm,solid_m_centres,accepted"};
