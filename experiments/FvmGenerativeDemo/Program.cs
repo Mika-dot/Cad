@@ -18,6 +18,8 @@ internal static class Program
         var self=args.Contains("--self-test",StringComparer.OrdinalIgnoreCase);
         try
         {
+            if(args.Contains("--multiphysics-self-test",StringComparer.OrdinalIgnoreCase))
+                return MultiphysicsSelfTest.Run();
             if(args.Contains("--multi-scene",StringComparer.OrdinalIgnoreCase))
                 return UniversalDesign.Run(args);
             if(args.Contains("--two-spheres",StringComparer.OrdinalIgnoreCase))
