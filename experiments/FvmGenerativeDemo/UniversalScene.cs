@@ -7,6 +7,7 @@ namespace FvmGenerativeDemo;
 // Arbitrarily nested CSG (not merely spheres). Positive implicit field = solid.
 internal abstract class ImplicitSolid
 {
+    internal static string SceneDirectory=Environment.CurrentDirectory;
     internal abstract double F(Point3 p);
 
     private static double Num(JsonElement e,string name,double fallback=double.NaN)
@@ -34,6 +35,9 @@ internal abstract class ImplicitSolid
             "capsule"=>new Capsule(P(j,"a"),P(j,"b"),Num(j,"radius")),
             "cylinder"=>new Cylinder(P(j,"a"),P(j,"b"),Num(j,"radius")),
             "torus"=>new Torus(center,Num(j,"majorRadius"),Num(j,"minorRadius")),
+            "mesh"=>ImplicitMesh.Load(Path.IsPathRooted(j.GetProperty("file").GetString())
+                ?j.GetProperty("file").GetString()!:
+                Path.Combine(SceneDirectory,j.GetProperty("file").GetString()!)),
             "union" or "intersection" or "difference" => ParseBoolean(type,j),
             _=>throw new ArgumentException($"Unsupported implicit CSG shape '{type}'.")
         };
@@ -169,6 +173,7 @@ internal sealed class UniversalScene
 
     internal static UniversalScene Load(string file)
     {
+        ImplicitSolid.SceneDirectory=Path.GetDirectoryName(Path.GetFullPath(file))!;
         using var doc=JsonDocument.Parse(File.ReadAllText(file));
         var j=doc.RootElement;
         var s=new UniversalScene{
