@@ -1,0 +1,124 @@
+{
+  "bounds": {
+    "min": [
+      -15,
+      -23,
+      -18
+    ],
+    "max": [
+      78,
+      37,
+      18
+    ]
+  },
+  "routingStepMm": 5,
+  "fvmStepMm": 5,
+  "bridgeRadiusMm": 4,
+  "femCells": [
+    10,
+    7,
+    6
+  ],
+  "iterations": 3,
+  "material": {
+    "youngMpa": 200000,
+    "poisson": 0.3,
+    "densityKgM3": 7850
+  },
+  "limits": {
+    "vonMisesMpa": 550,
+    "displacementMm": 1.5
+  },
+  "bodies": [
+    {
+      "id": "fixed-sphere",
+      "role": "fixed",
+      "shape": {
+        "type": "sphere",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "radius": 9
+      }
+    },
+    {
+      "id": "loaded-box",
+      "role": "load",
+      "shape": {
+        "type": "box",
+        "center": [
+          64,
+          0,
+          0
+        ],
+        "halfSize": [
+          8,
+          8,
+          8
+        ]
+      },
+      "forceN": [
+        130,
+        10,
+        0
+      ]
+    },
+    {
+      "id": "anchored-ellipsoid",
+      "role": "anchor",
+      "shape": {
+        "type": "union",
+        "children": [
+          {
+            "type": "ellipsoid",
+            "center": [
+              53,
+              23,
+              0
+            ],
+            "radii": [
+              8,
+              7,
+              7
+            ]
+          },
+          {
+            "type": "box",
+            "center": [
+              57,
+              23,
+              0
+            ],
+            "halfSize": [
+              5,
+              4,
+              5
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "excluded-pillar",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          33,
+          4,
+          -14
+        ],
+        "b": [
+          33,
+          4,
+          14
+        ],
+        "radius": 7.5
+      },
+      "clearanceMm": 1.5
+    }
+  ]
+}
