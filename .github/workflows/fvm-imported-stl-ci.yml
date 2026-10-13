@@ -19,6 +19,8 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Build with warnings as errors
         run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Prepare actual watertight binary STL source fixture
+        run: python experiments/FvmGenerativeDemo/make_input_binary_stl.py experiments/FvmGenerativeDemo/input_cube_ascii.stl experiments/FvmGenerativeDemo/input_cube_binary.stl
       - name: Optimize free FVM topology around imported STL
         run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_imported_stl.json --iterations 3 --gradient-check --self-test --out output/stl
       - name: Verify manifold STL and every protected solid and keepout
