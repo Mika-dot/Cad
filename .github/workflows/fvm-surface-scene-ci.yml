@@ -47,6 +47,9 @@ jobs:
           python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json output/free-pressure
       - name: Check three-level pressure-loaded binary FEM convergence indicators (report only, not certified)
         run: python -c "import json,math; j=json.load(open('output/free-pressure/mesh_refinement.json')); assert len(j['entries'])==3 and j['convergenceScreenPassed'] in (True,False); assert all(math.isfinite(j[k]) for k in ('lastRefinementRelativeVolumePercent','lastRefinementRelativeStressPercent','lastRefinementRelativeDisplacementPercent')); print('PASS pressure-driven three-level FEM diagnostics:',j['convergenceScreenPassed'])"
+      - name: Verify BOTH refinement intervals, not just a deceptively small final stress change
+        run: |
+          python -c "import json; r=json.load(open('output/free-pressure/mesh_refinement.json')); assert len(r['transitions'])==2; a,b=r['transitions']; assert abs(a['relativeStressPercent'])>10 and abs(b['relativeStressPercent'])<10; assert r['convergenceScreenPassed'] is False; assert r['maxAbsRefinementStressPercent']>=abs(a['relativeStressPercent']); print('PASS fail-closed mesh screen: first stress drift=',round(a['relativeStressPercent'],2),'%, second=',round(b['relativeStressPercent'],2),'%')"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
