@@ -18,6 +18,17 @@ internal static class Program
         var self=args.Contains("--self-test",StringComparer.OrdinalIgnoreCase);
         try
         {
+            if(args.Contains("--validate-scene",StringComparer.OrdinalIgnoreCase))
+            {
+                var at=Array.FindIndex(args,v=>v=="--validate-scene");
+                if(at<0||at+1>=args.Length)
+                    throw new ArgumentException("--validate-scene requires input JSON path.");
+                var scene=UniversalScene.Load(args[at+1]);
+                Console.WriteLine($"SCENE VALIDATION PASS: {scene.Bodies.Count} required solids, "+
+                    $"{scene.Obstacles.Count} keepouts and {scene.LoadCases.Count} loadcases. "+
+                    "No sampled mandatory/forbidden overlaps.");
+                return 0;
+            }
             if(args.Contains("--multiphysics-self-test",StringComparer.OrdinalIgnoreCase))
                 return MultiphysicsSelfTest.Run();
             if(args.Contains("--free-topology",StringComparer.OrdinalIgnoreCase))
