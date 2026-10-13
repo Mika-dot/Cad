@@ -166,6 +166,69 @@ internal static class MultiphysicsSelfTest
             if(File.Exists(pressureFile))File.Delete(pressureFile);
         }
 
+        // Cross-cell immersed traction: a slanted triangle can cross MANY
+        // background Hex8 boundaries. Integrating three un-clipped samples
+        // fails to integrate piecewise-trilinear N_a consistently. The
+        // per-cell clipped degree-5 rule must agree with independently
+        // re-triangulating the SAME surface into 32x32 small patches.
+        var inclinedA=new Point3(11,7,6);
+        var inclinedB=new Point3(89,11,9);
+        var inclinedC=new Point3(40,27,25);
+        const double obliquePressure=2.75;
+        var triangleAreaVector=Point3.Cross(inclinedB-inclinedA,
+            inclinedC-inclinedA)*.5;
+        var exactForce=triangleAreaVector*obliquePressure;
+        var centre=(inclinedA+inclinedB+inclinedC)*(1.0/3);
+        var exactMoment=Point3.Cross(centre,exactForce);
+        HexFem Oblique(IReadOnlyList<HexTrianglePressure> patches)=>
+            new HexFem(8,3,3,0,0,0,12.5,10,10,e,0,
+                (_x,_y,_z)=>1,null,loadN:0,interfaceHalfWidth:0,
+                emin:1e-5,epsF:.1,trianglePressures:patches);
+        var onePatch=Oblique(new[]{
+            new HexTrianglePressure(inclinedA,inclinedB,inclinedC,obliquePressure)
+        });
+        var n=32;
+        var divided=new List<HexTrianglePressure>();
+        Point3 GridPoint(int u,int v)=>inclinedA+
+            (inclinedB-inclinedA)*(u/(double)n)+
+            (inclinedC-inclinedA)*(v/(double)n);
+        for(int i=0;i<n;i++)for(int j=0;j<n-i;j++)
+        {
+            divided.Add(new HexTrianglePressure(
+                GridPoint(i,j),GridPoint(i+1,j),GridPoint(i,j+1),obliquePressure));
+            if(i+j<n-1)
+                divided.Add(new HexTrianglePressure(
+                    GridPoint(i+1,j),GridPoint(i+1,j+1),
+                    GridPoint(i,j+1),obliquePressure));
+        }
+        var manyPatches=Oblique(divided);
+        var one=onePatch.AppliedForceVector();
+        var many=manyPatches.AppliedForceVector();
+        var normMany=Math.Sqrt(many.Sum(x=>x*x));
+        var relative=Math.Sqrt(one.Zip(many,(x,y)=>(x-y)*(x-y)).Sum())/
+            Math.Max(normMany,1e-14);
+        Check(relative<2e-8,
+            "Clipped degree-5 Hex8 pressure must match 1024 independently triangulated inclined patches");
+        var resultant=onePatch.AppliedResultantN;
+        var moment=onePatch.AppliedMomentNmm;
+        Check((new Point3(resultant.X,resultant.Y,resultant.Z)-exactForce).Norm()<1e-7,
+            "Arbitrary immersed pressure triangle must conserve exact force");
+        Check((new Point3(moment.X,moment.Y,moment.Z)-exactMoment).Norm()<2e-5,
+            "Arbitrary immersed pressure must conserve exact force moment including cross-cell facets");
+        // Internal Hex8 plane is a deliberate geometric quadrature regression,
+        // not a physically admissible pressure surface in a CAD scene.
+        var onSharedFace=Oblique(new[]{
+            new HexTrianglePressure(new Point3(50,4,4),
+                new Point3(50,24,4),new Point3(50,4,24),2)
+        });
+        var shared=onSharedFace.AppliedResultantN;
+        Check(Math.Abs(shared.X-400)<1e-8 &&
+              Math.Abs(shared.Y)<1e-8&&Math.Abs(shared.Z)<1e-8,
+              "Pressure triangle coplanar with internal Hex8 grid plane must be owned once");
+        Console.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "CROSS-CELL PRESSURE PASS: nFine={0}, nodal L2 rel={1:E3}, force=({2:F8},{3:F8},{4:F8})N, exact total and moment conserved",
+            divided.Count,relative,resultant.X,resultant.Y,resultant.Z));
+
         var thermal=fem.ThermalConductance(45,
             (x,y,z)=>x>=length-1e-8,
             (x,y,z)=>x<=1e-8);
