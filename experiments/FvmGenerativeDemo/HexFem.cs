@@ -168,8 +168,8 @@ internal sealed partial class HexFem
             if((axis==0?i:axis==1?j:k)!=plane)continue;
             foreach(var g1 in Gauss)foreach(var g2 in Gauss)
             {
-                var param1=axis==0?1:0;var param2=axis==2?1:2;
-                if(axis==1){param1=0;param2=2;}
+                var param1=axis==0?1:0;
+                var param2=axis==2?1:2;
                 for(int a=0;a<8;a++)
                 {
                     var c=Corners[a];
