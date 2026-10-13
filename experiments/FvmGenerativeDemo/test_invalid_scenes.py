@@ -49,4 +49,16 @@ conflict["obstacles"]=[{
 }]
 run_bad("mandatory fixture intersects forbidden region away from seed",
         conflict,"overlaps prohibited keepout")
-print("PASS three invalid geometry and FEM scenarios fail closed")
+# Regression: the real six-body demonstrator originally included a
+# geometric contradiction (the protected anchor cylinder penetrated the
+# lower forbidden block at a point far away from its supplied seed). A
+# simplistic seed-only check accepted it and destroyed protected geometry.
+fixture_path=Path(__file__).with_name("multi_scene_6_bodies.json")
+fixture=json.loads(fixture_path.read_text(encoding="utf8"))
+collision=json.loads(json.dumps(fixture))
+old_keepout=next(x for x in collision["obstacles"] if x["id"]=="lower-block")
+old_keepout["shape"]["center"]=[38,-6,0]
+old_keepout["shape"]["halfSize"]=[6,5,10]
+run_bad("real six-body forbidden volume clips protected cylindrical anchor",
+        collision,"overlaps prohibited keepout")
+print("PASS four invalid geometry and FEM scenarios fail closed")
