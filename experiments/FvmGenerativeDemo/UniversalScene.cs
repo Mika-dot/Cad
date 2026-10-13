@@ -452,6 +452,11 @@ internal sealed class MultiTerminalRouter
             // Without this, repeated implicit F evaluations create O(grid*route nodes)
             // segments and can dominate the finite-element solution.
             var reduced=new List<Point3>();
+            // Keep the exact snapped grid endpoints as future physical junctions.
+            // Other branches may join ONLY these emitted points, never discarded
+            // routing nodes that no longer lie on an exported segment.
+            var mandatory=new HashSet<int>{0,branch.Polyline.Count-1,
+                branch.Polyline.Count-2,results.Count==0?1:0};
             int from=0;
             while(from<branch.Polyline.Count-1)
             {
@@ -459,7 +464,8 @@ internal sealed class MultiTerminalRouter
                 int to=from+1;
                 for(int candidate=branch.Polyline.Count-1;candidate>from+1;candidate--)
                 {
-                    if(SegmentFree(branch.Polyline[from],branch.Polyline[candidate]))
+                    if(!mandatory.Any(id=>id>from&&id<candidate)&&
+                       SegmentFree(branch.Polyline[from],branch.Polyline[candidate]))
                     {
                         to=candidate;break;
                     }
@@ -469,7 +475,7 @@ internal sealed class MultiTerminalRouter
             reduced.Add(branch.Polyline[^1]);
             branch.Polyline.Clear();
             branch.Polyline.AddRange(reduced);
-            foreach(var node in chain)network.Add(node);
+            network.Add(dest);
             results.Add(branch);
         }
         return results;
