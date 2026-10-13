@@ -394,6 +394,27 @@ internal sealed class MultiTerminalRouter
             branch.Polyline.Add(chosen.Seed);
             // Ensure first and last points join exact material seeds.
             if(results.Count==0)branch.Polyline.Insert(0,root.Seed);
+            // Remove intermediate collinear and obstacle-free waypoints.
+            // Without this, repeated implicit F evaluations create O(grid*route nodes)
+            // segments and can dominate the finite-element solution.
+            var reduced=new List<Point3>();
+            int from=0;
+            while(from<branch.Polyline.Count-1)
+            {
+                reduced.Add(branch.Polyline[from]);
+                int to=from+1;
+                for(int candidate=branch.Polyline.Count-1;candidate>from+1;candidate--)
+                {
+                    if(SegmentFree(branch.Polyline[from],branch.Polyline[candidate]))
+                    {
+                        to=candidate;break;
+                    }
+                }
+                from=to;
+            }
+            reduced.Add(branch.Polyline[^1]);
+            branch.Polyline.Clear();
+            branch.Polyline.AddRange(reduced);
             foreach(var node in chain)network.Add(node);
             results.Add(branch);
         }
@@ -433,8 +454,10 @@ internal sealed class UniversalField
             var r=_scene.BridgeRadius+P[b];
             for(var i=1;i<path.Count;i++)
             {
-                var edge=new ImplicitSolid.Capsule(path[i-1],path[i],r);
-                value=Math.Max(value,edge.F(point));
+                var start=path[i-1];var delta=path[i]-start;
+                var dd=Point3.Dot(delta,delta);
+                var t=dd>0?Math.Clamp(Point3.Dot(point-start,delta)/dd,0,1):0;
+                value=Math.Max(value,r-(point-(start+delta*t)).Norm());
             }
         }
         foreach(var obstacle in _scene.Obstacles)
