@@ -179,7 +179,7 @@ internal static class TwoSphereDesign
 {
     private const int NX=10,NY=6,NZ=6;
     private const double Eps=2.0;
-    private sealed record State(double[] P,TwoSphereField Field,
+    internal sealed record State(double[] P,TwoSphereField Field,
         FunctionalVoxelModel Model,HexFem Fem,FemResults Mechanics);
 
     private static string Arg(string[] a,string name,string fallback)
