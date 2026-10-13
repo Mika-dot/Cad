@@ -31,18 +31,55 @@ internal sealed class ImplicitMesh : ImplicitSolid
         if(triangles.Count<4||triangles.Count>200000)
             throw new ArgumentException("STL requires 4..200000 facets.");
         _faces=triangles.Count;
-        var edges=new Dictionary<(Point3,Point3),int>();
-        foreach(var tri in triangles)
+        // Edge incidence alone is NOT proof of a valid printable solid:
+        // reject folded winding, duplicate facets and disconnected shells.
+        var edgeMap=new Dictionary<(Point3,Point3),List<(int Index,int Sign)>>();
+        double signedVolume=0;
+        for(int i=0;i<triangles.Count;i++)
         {
+            var tri=triangles[i];
+            signedVolume+=Point3.Dot(tri.A,Point3.Cross(tri.B,tri.C))/6;
+            if(Point3.Cross(tri.B-tri.A,tri.C-tri.A).Norm()<1e-13)
+                throw new ArgumentException("Degenerate STL facet.");
             foreach(var (a,b) in new[]{(tri.A,tri.B),(tri.B,tri.C),(tri.C,tri.A)})
             {
                 if(a==b)throw new ArgumentException("Degenerate input STL edge.");
-                var key=Compare(a,b)<0?(a,b):(b,a);
-                edges.TryGetValue(key,out var n);edges[key]=n+1;
+                var forward=Compare(a,b)<0;
+                var key=forward?(a,b):(b,a);
+                if(!edgeMap.TryGetValue(key,out var owners))
+                    edgeMap[key]=owners=new List<(int,int)>();
+                owners.Add((i,forward?1:-1));
             }
         }
-        if(edges.Values.Any(c=>c!=2))
-            throw new ArgumentException("Input STL must be watertight: every edge has two facets.");
+        var neighbours=new List<int>[triangles.Count];
+        for(int i=0;i<neighbours.Length;i++)neighbours[i]=new List<int>();
+        foreach(var owners in edgeMap.Values)
+        {
+            if(owners.Count!=2)
+                throw new ArgumentException("STL is not a watertight 2-manifold.");
+            if(owners[0].Sign==owners[1].Sign)
+                throw new ArgumentException("STL triangle winding is inconsistent.");
+            neighbours[owners[0].Index].Add(owners[1].Index);
+            neighbours[owners[1].Index].Add(owners[0].Index);
+        }
+        var visited=new bool[triangles.Count];
+        var q=new Queue<int>();q.Enqueue(0);visited[0]=true;
+        var count=0;
+        while(q.Count>0)
+        {
+            var at=q.Dequeue();count++;
+            foreach(var adjacent in neighbours[at])
+            {
+                if(visited[adjacent])continue;
+                visited[adjacent]=true;q.Enqueue(adjacent);
+            }
+        }
+        if(count!=triangles.Count)
+            throw new ArgumentException("STL has disconnected shells.");
+        if(Math.Abs(signedVolume)<1e-9)
+            throw new ArgumentException("STL enclosed signed volume is zero.");
+        // Face winding may be consistently inverted. Parity-based sign
+        // determination is orientation-independent, so this is permissible.
         _root=Build(triangles,0);
     }
     private static int Compare(Point3 a,Point3 b)
