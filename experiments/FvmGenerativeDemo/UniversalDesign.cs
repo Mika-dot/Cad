@@ -46,6 +46,8 @@ internal static class UniversalDesign
         var router=new MultiTerminalRouter(scene);
         var branches=router.Route();
         Check(branches.Count==scene.Bodies.Count-1,"All terminals routed.");
+        if(scene.AssertDetour)Check(branches.Any(b=>b.Polyline.Count>=3),
+            "Forced obstacle test requires a nonstraight routed polyline.");
         var summaryRoute=new List<string>{"branch,target,point,x_mm,y_mm,z_mm"};
         for(int i=0;i<branches.Count;i++)
         {
