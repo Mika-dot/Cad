@@ -10,6 +10,7 @@ on:
       - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
       - 'experiments/FvmGenerativeDemo/pressure_load_box_end.stl'
       - 'experiments/FvmGenerativeDemo/test_surface_pressure_scenes.py'
+      - 'experiments/FvmGenerativeDemo/test_pressure_strict_convergence.py'
       - 'experiments/FvmGenerativeDemo/validate_free_topology.py'
       - '.github/workflows/fvm-surface-scene-ci.yml'
   workflow_dispatch:
@@ -50,6 +51,8 @@ jobs:
       - name: Verify BOTH refinement intervals, not just a deceptively small final stress change
         run: |
           python -c "import json; r=json.load(open('output/free-pressure/mesh_refinement.json')); assert len(r['transitions'])==2; a,b=r['transitions']; assert abs(a['relativeStressPercent'])>10 and abs(b['relativeStressPercent'])<10; assert r['convergenceScreenPassed'] is False; assert r['maxAbsRefinementStressPercent']>=abs(a['relativeStressPercent']); print('PASS fail-closed mesh screen: first stress drift=',round(a['relativeStressPercent'],2),'%, second=',round(b['relativeStressPercent'],2),'%')"
+      - name: Strict verification MUST withhold STL if first FEM refinement changes pressure stress by 57 percent
+        run: python experiments/FvmGenerativeDemo/test_pressure_strict_convergence.py experiments/FvmGenerativeDemo/bin/Release/net8.0/FvmGenerativeDemo.dll experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json output/pressure-strict
       - uses: actions/upload-artifact@v4
         if: always()
         with:
