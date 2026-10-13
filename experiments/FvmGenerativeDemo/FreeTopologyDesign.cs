@@ -112,12 +112,30 @@ internal sealed class FreeTopologyField
             if(w>0)add(Grid.LinearIndex(ids),w);
         }
     }
-    private double Density(Point3 p)
+    // Apply the Heaviside projection AFTER spatial interpolation, exactly
+    // as the FEM material field sees it, not once at independent lattice
+    // centres (which would have a different Jacobian).
+    private double FilteredDensity(Point3 p)
     {
         double density=0;
         ControlWeights(p,(id,w)=>density+=w*Filtered[id]);
         return density;
     }
+    private double Project(double filtered)
+    {
+        var beta=Scene.ProjectionBeta;
+        if(beta==0)return filtered;
+        var reference=Math.Tanh(beta*.5);
+        return (reference+Math.Tanh(beta*(filtered-.5)))/(2*reference);
+    }
+    private double ProjectionDerivative(double filtered)
+    {
+        var beta=Scene.ProjectionBeta;
+        if(beta==0)return 1;
+        var t=Math.Tanh(beta*(filtered-.5));
+        return beta*(1-t*t)/(2*Math.Tanh(beta*.5));
+    }
+    private double Density(Point3 p)=>Project(FilteredDensity(p));
     private double BaseMaterial(Point3 p)
     {
         var value=double.NegativeInfinity;
@@ -170,7 +188,8 @@ internal sealed class FreeTopologyField
     private void FieldTranspose(Point3 p,double scale,double[] gradient)
     {
         if(scale==0||!DesignIsActive(p))return;
-        ControlWeights(p,(id,w)=>gradient[id]+=scale*2*Eps*w);
+        var factor=ProjectionDerivative(FilteredDensity(p));
+        ControlWeights(p,(id,w)=>gradient[id]+=scale*2*Eps*factor*w);
     }
     // Adjoint chain through M interpolation and all 3 sampled gradients.
     // ReconstructJet is an affine tangent at each sampled centre, despite
@@ -819,7 +838,8 @@ internal static class FreeTopologyDesign
         var summary=new{
             mode="free-topology-fvm-simp-oc",scene=Path.GetFileName(path),
             inputBodies=scene.Bodies.Count,obstacles=scene.Obstacles.Count,
-            variables=free,initialVolumeMm3=initial.Volume,finalVolumeMm3=current.Volume,
+            variables=free,heavisideProjectionBeta=scene.ProjectionBeta,
+            initialVolumeMm3=initial.Volume,finalVolumeMm3=current.Volume,
             volumeReductionPercent=(1-current.Volume/initial.Volume)*100,
             acceptedUpdates=accepted,nucleatedVoidPatches=nucleated,
             complianceNmm=current.Compliance,
