@@ -4,6 +4,7 @@ on:
     branches: [feature/fvm-generative-mechanics]
     paths:
       - 'experiments/FvmGenerativeDemo/HexFem.cs'
+      - 'experiments/FvmGenerativeDemo/HexFemSurfacePressure.cs'
       - 'experiments/FvmGenerativeDemo/MultiphysicsSelfTest.cs'
       - '.github/workflows/fvm-surface-traction-ci.yml'
   workflow_dispatch:
