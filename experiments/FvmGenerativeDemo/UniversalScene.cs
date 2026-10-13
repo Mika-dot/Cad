@@ -130,6 +130,21 @@ internal sealed class UniversalScene
     internal readonly List<UniversalBody> Bodies=new();
     internal readonly List<UniversalObstacle> Obstacles=new();
     internal readonly List<(string Name,Dictionary<string,Point3> Loads)> LoadCases=new();
+    internal readonly Dictionary<string,List<HexTrianglePressure>> SurfacePressureCases=new(
+        StringComparer.Ordinal);
+    internal IReadOnlyList<HexTrianglePressure> PressureFor(string name)=>
+        SurfacePressureCases.TryGetValue(name,out var triangles)
+            ?triangles:Array.Empty<HexTrianglePressure>();
+    internal Point3 AppliedForce(string name,Dictionary<string,Point3> forces)
+    {
+        var total=new Point3(forces.Values.Sum(v=>v.X),
+                             forces.Values.Sum(v=>v.Y),
+                             forces.Values.Sum(v=>v.Z));
+        foreach(var patch in PressureFor(name))
+            total+=Point3.Cross(patch.B-patch.A,patch.C-patch.A)*
+                (patch.PressureMpa*.5);
+        return total;
+    }
     internal Point3 Min {get;private set;}
     internal Point3 Max {get;private set;}
     internal double RouteStep {get;private set;}
@@ -323,13 +338,57 @@ internal sealed class UniversalScene
             foreach(var c in cases.EnumerateArray())
             {
                 var forces=new Dictionary<string,Point3>();
-                foreach(var pair in c.GetProperty("forcesN").EnumerateObject())
-                    forces.Add(pair.Name,ImplicitSolid.Vec(pair.Value));
+                if(c.TryGetProperty("forcesN",out var forceValues))
+                    foreach(var pair in forceValues.EnumerateObject())
+                        forces.Add(pair.Name,ImplicitSolid.Vec(pair.Value));
                 s.LoadCases.Add((c.GetProperty("name").GetString()??"case",forces));
             }
         }
         else s.LoadCases.Add(("default",s.Bodies.Where(b=>b.Force.Norm()>0)
             .ToDictionary(b=>b.Id,b=>b.Force)));
+        if(j.TryGetProperty("surfacePressurePatches",out var pressurePatches))
+        {
+            foreach(var patch in pressurePatches.EnumerateArray())
+            {
+                var caseName=patch.GetProperty("loadCase").GetString()??
+                    throw new ArgumentException("Surface pressure loadCase is required.");
+                var bodyId=patch.GetProperty("bodyId").GetString()??
+                    throw new ArgumentException("Surface pressure bodyId is required.");
+                var body=s.Bodies.FirstOrDefault(b=>b.Id==bodyId);
+                if(body is null||body.Role=="fixed")
+                    throw new ArgumentException(
+                        $"Pressure patch target '{bodyId}' must be an existing nonfixed body.");
+                if(!s.LoadCases.Any(l=>l.Name==caseName))
+                    throw new ArgumentException(
+                        $"Pressure patch references unknown load case '{caseName}'.");
+                var stl=patch.GetProperty("stlFile").GetString()??
+                    throw new ArgumentException("Pressure patch requires STL filename.");
+                var path=Path.IsPathRooted(stl)?stl:Path.Combine(
+                    ImplicitSolid.SceneDirectory,stl);
+                var triangles=SurfacePatchStl.Read(path,
+                    Scalar(patch,"pressureMpa",0));
+                foreach(var tri in triangles)
+                {
+                    var centre=(tri.A+tri.B+tri.C)*(1.0/3);
+                    var outward=Point3.Cross(tri.B-tri.A,tri.C-tri.A);
+                    var n=outward*(1/outward.Norm());
+                    var delta=Math.Min(.1,.05*s.FvmStep);
+                    if(Math.Abs(body.Shape.F(centre))>
+                        Math.Max(.15*s.FvmStep,.5))
+                        throw new ArgumentException(
+                            $"Pressure STL facet not on body '{bodyId}' boundary.");
+                    if(body.Shape.F(centre-n*delta)<=body.Shape.F(centre+n*delta))
+                        throw new ArgumentException(
+                            $"Pressure STL triangle winding not outward from '{bodyId}'.");
+                    if(!s.Within(tri.A)||!s.Within(tri.B)||!s.Within(tri.C))
+                        throw new ArgumentException(
+                            $"Pressure patch for '{bodyId}' lies outside FEM domain.");
+                }
+                if(!s.SurfacePressureCases.TryGetValue(caseName,out var list))
+                    s.SurfacePressureCases[caseName]=list=new List<HexTrianglePressure>();
+                list.AddRange(triangles);
+            }
+        }
         s.Validate();
         return s;
     }
@@ -404,7 +463,8 @@ internal sealed class UniversalScene
         }
         foreach(var (name,forces) in LoadCases)
         {
-            if(forces.Count==0||forces.Values.All(v=>v.Norm()<1e-9))
+            if((forces.Count==0||forces.Values.All(v=>v.Norm()<1e-9))&&
+               PressureFor(name).Count==0)
                 throw new ArgumentException($"Load case '{name}' has no applied forces.");
             foreach(var id in forces.Keys)
                 if(!Bodies.Any(b=>b.Id==id&&b.Role!="fixed"))
