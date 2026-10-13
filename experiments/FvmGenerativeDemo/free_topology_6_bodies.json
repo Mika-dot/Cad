@@ -1,0 +1,216 @@
+{
+  "name": "Six-body CSG bracket with two keep-outs",
+  "bounds": {
+    "min": [
+      -15,
+      -20,
+      -20
+    ],
+    "max": [
+      75,
+      53,
+      25
+    ]
+  },
+  "routingStepMm": 5,
+  "fvmStepMm": 5,
+  "bridgeRadiusMm": 4,
+  "femCells": [
+    10,
+    8,
+    7
+  ],
+  "iterations": 2,
+  "material": {
+    "youngMpa": 200000,
+    "poisson": 0.3,
+    "densityKgM3": 7850,
+    "thermalConductivityWmK": 45,
+    "alphaPerK": 0.000012
+  },
+  "limits": {
+    "vonMisesMpa": 450,
+    "displacementMm": 1
+  },
+  "bodies": [
+    {
+      "id": "fixed-sphere",
+      "role": "fixed",
+      "shape": {
+        "type": "sphere",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "radius": 9
+      }
+    },
+    {
+      "id": "fixed-box",
+      "role": "fixed",
+      "shape": {
+        "type": "box",
+        "center": [
+          0,
+          35,
+          0
+        ],
+        "halfSize": [
+          7,
+          8,
+          7
+        ]
+      }
+    },
+    {
+      "id": "load-box",
+      "role": "load",
+      "shape": {
+        "type": "box",
+        "center": [
+          63,
+          0,
+          0
+        ],
+        "halfSize": [
+          8,
+          8,
+          7
+        ]
+      },
+      "forceN": [
+        100,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "load-ellipsoid",
+      "role": "load",
+      "shape": {
+        "type": "ellipsoid",
+        "center": [
+          60,
+          38,
+          0
+        ],
+        "radii": [
+          9,
+          7,
+          7
+        ]
+      },
+      "forceN": [
+        -50,
+        -25,
+        0
+      ]
+    },
+    {
+      "id": "anchor-capsule",
+      "role": "anchor",
+      "shape": {
+        "type": "capsule",
+        "a": [
+          15,
+          35,
+          10
+        ],
+        "b": [
+          25,
+          37,
+          16
+        ],
+        "radius": 5
+      }
+    },
+    {
+      "id": "anchor-cylinder",
+      "role": "anchor",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          42,
+          -5,
+          12
+        ],
+        "b": [
+          48,
+          -5,
+          20
+        ],
+        "radius": 5
+      }
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "central-cylinder",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          31,
+          13,
+          -18
+        ],
+        "b": [
+          31,
+          13,
+          23
+        ],
+        "radius": 8
+      },
+      "clearanceMm": 1.5
+    },
+    {
+      "id": "lower-block",
+      "shape": {
+        "type": "box",
+        "center": [
+          38,
+          -6,
+          0
+        ],
+        "halfSize": [
+          6,
+          5,
+          10
+        ]
+      },
+      "clearanceMm": 1
+    }
+  ],
+  "loadCases": [
+    {
+      "name": "tension-and-bend",
+      "forcesN": {
+        "load-box": [
+          100,
+          0,
+          0
+        ],
+        "load-ellipsoid": [
+          0,
+          -35,
+          0
+        ]
+      }
+    },
+    {
+      "name": "reverse-load",
+      "forcesN": {
+        "load-box": [
+          -70,
+          15,
+          0
+        ],
+        "anchor-capsule": [
+          0,
+          20,
+          -10
+        ]
+      }
+    }
+  ]
+}
