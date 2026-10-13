@@ -21,6 +21,7 @@ internal sealed partial class HexFem
     private readonly double _epsF;
     private readonly double _emin;
     private readonly double _densityKgMm3;
+    private readonly double _simpPower;
     private readonly int _nx, _ny, _nz;
     private readonly double _x0, _y0, _z0, _hx, _hy, _hz;
     internal double Volume { get; private set; }
@@ -42,16 +43,17 @@ internal sealed partial class HexFem
         double loadN, double interfaceHalfWidth, double emin = 1e-5, double epsF = 30,
         Func<double,double,double,bool>? support = null,
         Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null,
-        double densityKgMm3=7.85e-6)
+        double densityKgMm3=7.85e-6,double simpPower=1)
     {
         if (nx < 1 || ny < 1 || nz < 1 || hx <= 0 || hy <= 0 || hz <= 0 ||
             young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1 ||
-             densityKgMm3<=0 || !double.IsFinite(densityKgMm3))
+             densityKgMm3<=0 || !double.IsFinite(densityKgMm3) ||
+             simpPower<1 || simpPower>6 || !double.IsFinite(simpPower))
             throw new ArgumentException("Invalid finite-element mesh or elasticity.");
         _nx=nx; _ny=ny; _nz=nz;
         _x0=x0; _y0=y0; _z0=z0; _hx=hx; _hy=hy; _hz=hz;
         _field=field; _model=model; _emin=emin; _epsF=epsF;
-        _densityKgMm3=densityKgMm3;
+        _densityKgMm3=densityKgMm3;_simpPower=simpPower;
         var nodeCount=(nx+1)*(ny+1)*(nz+1);
         _rhs=new double[nodeCount*3]; _diag=new double[nodeCount*3];
         _fixed=new bool[nodeCount*3];
@@ -179,7 +181,7 @@ internal sealed partial class HexFem
                 for(int d=0;d<6;d++)sum+=_elastic[a,d]*b[d,c];
                 db[a,c]=sum;
             }
-            var factor=det*(_emin+(1-_emin)*h);
+            var factor=det*(_emin+(1-_emin)*Math.Pow(h,_simpPower));
             for(int a=0;a<24;a++)for(int c=0;c<24;c++)
             {
                 double v=0;
@@ -310,7 +312,9 @@ internal sealed partial class HexFem
                 for(int a=0;a<6;a++)for(int d=0;d<6;d++)
                     energy+=strain[a]*_elastic[a,d]*strain[d];
                 var dv=det/(2*_epsF);
-                result.Add(new GaussSensitivity(x,y,z,dv,-dv*(1-_emin)*energy));
+                var h=e.FractionAtGauss[Array.IndexOf(Gauss,xi)*4+Array.IndexOf(Gauss,eta)*2+Array.IndexOf(Gauss,zeta)];
+                var dK=(1-_emin)*_simpPower*Math.Pow(Math.Max(1e-12,h),_simpPower-1);
+                result.Add(new GaussSensitivity(x,y,z,dv,-dv*dK*energy));
             }
         }
         return result;
