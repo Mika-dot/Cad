@@ -1,9 +1,52 @@
 # Генеративное проектирование ФВМ + FEM (.NET 8)
 
-**Работающий исследовательский демонстратор**: две сферы → начальное
-соединение → 3D FEM → пространственные производные по форме →
-изменение единой неявной геометрии `F(x,y,z)` с согласованными
-пятью М-образами → новый FEM → облегчённый STL.
+**Актуальная реализация — свободная топологическая оптимизация ФВМ × FEM.**
+На входе 2–32 обязательных CSG/STL-тела, физические граничные условия,
+нагрузки, свойства материала и запретные области; пользователь **не
+рисует соединительные балки или фермы**. Программа создаёт поле материала
+во всём разрешённом 3D-пространстве, решает Hex8 FEM, вычисляет производные
+через пять М-образов, выполняет SIMP/OC, может создавать новые пустоты,
+проверяет бинарную геометрию и экспортирует STL. Есть опциональная
+гладкая проекция Хевисайда `projectionBeta`. Режимы `--two-spheres`
+и `--multi-scene` сохранены как независимые проверяемые прототипы
+с ограниченной параметризацией рёбер.
+
+Базовый проверенный сценарий:
+```powershell
+git switch feature/fvm-generative-mechanics
+dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+
+# Быстро проверить, что обязательные тела не пересекают запретные зоны:
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --validate-scene experiments/FvmGenerativeDemo/multi_scene_6_bodies.json
+
+# Выполнить свободную топологическую оптимизацию и три независимые
+# проверки FEM-градиента:
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology experiments/FvmGenerativeDemo/free_topology_6_bodies.json --iterations 3 --gradient-check --self-test --out output/free-six
+
+python experiments/FvmGenerativeDemo/validate_stl.py output/free-six/initial.stl output/free-six/optimized.stl
+python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_6_bodies.json output/free-six
+```
+
+[Математика свободной топологии](../../docs/FVM_FREE_TOPOLOGY_SIMP_OC.md)
+и [журнал подтверждённых тестов](TASK_JOURNAL.md).
+
+**Подтверждённая корректная постановка 6 тел после устранения
+пересечения обязательной детали с препятствием:**
+[FVM topology CI #38398019577](https://github.com/Mika-dot/Cad/actions/runs/38398019577):
+6 обязательных объектов, 2 запретные зоны, 2 нагрузочных случая,
+775 проектных переменных, 6 принятых изменений, 3 новых пустоты,
+**−21.485%** сглаженного FEM-объёма, **−29.036%**
+геометрического STL-объёма.
+[Полный CI Windows, Linux и оригинальный FEM Python](https://github.com/Mika-dot/Cad/actions/runs/38398027920): 3/3 PASS.
+[Проверка согласованности входных условий](https://github.com/Mika-dot/Cad/actions/runs/38398736352):
+положительные и отрицательные сцены PASS.
+
+**Ограничение:** это численно протестированный исследовательский
+прототип, а не подтверждение промышленной несущей способности.
+Даже при успешном FEM допустима существенная зависимость напряжений
+от дискретизации. Требуются уточнённая сетка, реальные поверхностные
+граничные условия, технологические ограничения и независимое
+физическое испытание изделия.
 
 Основное пошаговое описание — **[FVM_FEM_GENERATIVE_DESIGN_GUIDE.md](../../docs/FVM_FEM_GENERATIVE_DESIGN_GUIDE.md)**.
 Полный научный план — [MASTERPLAN](../../docs/FVM_GENERATIVE_MECHANICS_MASTERPLAN.md).
