@@ -16,8 +16,8 @@
   "fvmStepMm": 5,
   "bridgeRadiusMm": 4,
   "femCells": [
+    11,
     10,
-    8,
     7
   ],
   "iterations": 2,
