@@ -1,0 +1,164 @@
+{
+  "bounds": {
+    "min": [
+      -15,
+      -23,
+      -18
+    ],
+    "max": [
+      78,
+      37,
+      18
+    ]
+  },
+  "routingStepMm": 5,
+  "fvmStepMm": 5,
+  "bridgeRadiusMm": 4,
+  "femCells": [
+    10,
+    7,
+    6
+  ],
+  "iterations": 1,
+  "material": {
+    "youngMpa": 200000,
+    "poisson": 0.3,
+    "densityKgM3": 7850
+  },
+  "limits": {
+    "vonMisesMpa": 550,
+    "displacementMm": 1.5,
+    "minFirstFrequencyHz": 5,
+    "maxImpactDisplacementMm": 1.5,
+    "maxImpactVonMisesMpa": 650,
+    "minThermalConductanceWPerK": 0.00005,
+    "maxThermalVonMisesMpa": 800,
+    "maxThermalDisplacementMm": 1.5,
+    "maxHarmonicDisplacementMm": 1.5,
+    "maxFatigueDamage": 1
+  },
+  "bodies": [
+    {
+      "id": "fixed-sphere",
+      "role": "fixed",
+      "shape": {
+        "type": "sphere",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "radius": 9
+      }
+    },
+    {
+      "id": "loaded-box",
+      "role": "load",
+      "shape": {
+        "type": "box",
+        "center": [
+          64,
+          0,
+          0
+        ],
+        "halfSize": [
+          8,
+          8,
+          8
+        ]
+      },
+      "forceN": [
+        130,
+        10,
+        0
+      ]
+    },
+    {
+      "id": "anchored-ellipsoid",
+      "role": "anchor",
+      "shape": {
+        "type": "ellipsoid",
+        "center": [
+          53,
+          23,
+          0
+        ],
+        "radii": [
+          8,
+          7,
+          7
+        ]
+      }
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "excluded-pillar",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          33,
+          4,
+          -14
+        ],
+        "b": [
+          33,
+          4,
+          14
+        ],
+        "radius": 7.5
+      },
+      "clearanceMm": 1.5
+    }
+  ],
+  "loadCases": [
+    {
+      "name": "forward-tension",
+      "forcesN": {
+        "loaded-box": [
+          130,
+          10,
+          0
+        ]
+      }
+    },
+    {
+      "name": "reverse-and-bend",
+      "forcesN": {
+        "loaded-box": [
+          -80,
+          20,
+          5
+        ],
+        "anchored-ellipsoid": [
+          0,
+          15,
+          0
+        ]
+      }
+    }
+  ],
+  "impact": {
+    "halfSinePulseSeconds": 0.002,
+    "peakForceMultiplier": 1.5,
+    "dampingRatio": 0.03
+  },
+  "harmonic": {
+    "frequencyHz": 50,
+    "dampingRatio": 0.03
+  },
+  "thermal": {
+    "hotBody": "loaded-box",
+    "coldBody": "fixed-sphere",
+    "expansionPerK": 0.000012,
+    "hotKelvin": 373.15,
+    "coldKelvin": 293.15,
+    "referenceKelvin": 293.15
+  },
+  "fatigueScreen": {
+    "cycles": 100000,
+    "referenceLifeCycles": 2000000,
+    "referenceStressMpa": 250,
+    "basquinExponent": 5
+  }
+}
