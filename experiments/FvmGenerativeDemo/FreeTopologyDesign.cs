@@ -318,20 +318,34 @@ internal static class FreeTopologyDesign
         Directory.CreateDirectory(outDir);
         var origin=scene.Min;var size=scene.Max-scene.Min;
         var nx=scene.FemCells[0];var ny=scene.FemCells[1];var nz=scene.FemCells[2];
-        var hx=size.X/nx;var hy=size.Y/ny;var hz=size.Z/nz;
+        double hx=0,hy=0,hz=0;
         var nodes=new List<Point3>();
-        for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
-            nodes.Add(new Point3(origin.X+i*hx,origin.Y+j*hy,origin.Z+k*hz));
         bool Fixed(double x,double y,double z)
         {
             var p=new Point3(x,y,z);
             return scene.Bodies.Any(b=>b.Role=="fixed"&&b.Shape.F(p)>=0);
         }
-        var counts=scene.Bodies.ToDictionary(b=>b.Id,
-            b=>nodes.Count(p=>b.Shape.F(p)>=0));
-        foreach(var (id,count) in counts)Check(count>=2,
-            $"Boundary body '{id}' has fewer than 2 nodes. Refine femCells.");
-        Check(nodes.Count(p=>Fixed(p.X,p.Y,p.Z))>=3,"No FEM support nodes");
+        Dictionary<string,int> counts=new();
+        // Small mandatory fixtures cannot be silently lost by a coarse
+        // background Hex8 mesh. Refine it automatically until every fixture
+        // and loaded region has enough nodes for meaningful FEM boundary data.
+        for(int pass=0;pass<5;pass++)
+        {
+            hx=size.X/nx;hy=size.Y/ny;hz=size.Z/nz;
+            nodes.Clear();
+            for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
+                nodes.Add(new Point3(origin.X+i*hx,origin.Y+j*hy,origin.Z+k*hz));
+            counts=scene.Bodies.ToDictionary(b=>b.Id,
+                b=>nodes.Count(p=>b.Shape.F(p)>=0));
+            if(counts.Values.All(n=>n>=2)&&
+                nodes.Count(p=>Fixed(p.X,p.Y,p.Z))>=3)break;
+            Check(pass<4&&nx<25&&ny<25&&nz<25,
+                "FEM background grid cannot resolve a prescribed fixture within 25 cells/axis.");
+            nx=Math.Min(25,(int)Math.Ceiling(nx*1.30)+1);
+            ny=Math.Min(25,(int)Math.Ceiling(ny*1.30)+1);
+            nz=Math.Min(25,(int)Math.Ceiling(nz*1.30)+1);
+            Console.WriteLine($"AUTO FEM REFINEMENT: fixture masks need more nodes; nx={nx} ny={ny} nz={nz}");
+        }
         foreach(var (name,forces) in scene.LoadCases)
             foreach(var (id,v) in forces)
             {
