@@ -87,9 +87,10 @@ def inspect_stl(filename,obstacles):
                     closest_clearance=min(closest_clearance,-raw_f-obstacle["clearanceMm"])
                     # Tolerance accounts for STL triangulation and finite M
                     # reconstruction. Actual occupied obstacle volume is never allowed.
-                    if raw_f>0.05:
+                    if -raw_f-obstacle["clearanceMm"] < -0.05:
                         raise AssertionError(
-                            f"{filename}: STL enters keepout {obstacle['id']} by {raw_f:.4f} mm")
+                            f"{filename}: STL violates required nominal clearance "
+                            f"for {obstacle['id']} by {raw_f+obstacle['clearanceMm']:.4f} mm")
             verts.clear()
     assert triangles>1000
     print(f"PASS STL obstacle nonpenetration: {filename}, triangles={triangles}, "
@@ -97,7 +98,7 @@ def inspect_stl(filename,obstacles):
           f"minimum nominal clearance={closest_clearance:.4f}mm")
 
 
-def inspect_routes(routes,obstacles,bridge_radius):
+def inspect_routes(routes,obstacles,bridge_radius,extra_safety):
     branches={}
     for row in csv.DictReader(Path(routes).open(newline="",encoding="utf-8")):
         branches.setdefault(row["branch"],[]).append(tuple(
@@ -112,12 +113,12 @@ def inspect_routes(routes,obstacles,bridge_radius):
                 for obstacle in obstacles:
                     clearance=-sd(obstacle["shape"],p)-obstacle["clearanceMm"]
                     minimum=min(minimum,clearance)
-                    if clearance<bridge_radius-.3:
+                    if clearance<bridge_radius+extra_safety-.3:
                         raise AssertionError(
                             f"Path {branch} violates keepout {obstacle['id']}: "
-                            f"{clearance:.4f}mm remaining, needs {bridge_radius}mm")
+                            f"{clearance:.4f}mm remaining, needs {bridge_radius+extra_safety}mm")
     print(f"PASS route clearances: branches={len(branches)}, "
-          f"minimum free radial space={minimum:.4f}mm, required={bridge_radius}mm")
+          f"minimum free radial space={minimum:.4f}mm, required={bridge_radius+extra_safety}mm")
 
 
 if __name__=="__main__":
@@ -128,6 +129,6 @@ if __name__=="__main__":
     if not obs:
         print("PASS: no forbidden regions in scene")
         raise SystemExit(0)
-    inspect_routes(sys.argv[2],obs,scene["bridgeRadiusMm"])
+    inspect_routes(sys.argv[2],obs,scene["bridgeRadiusMm"],scene.get("surfaceSafetyMm",max(.25,scene["fvmStepMm"]*.3)))
     inspect_stl(sys.argv[3],obs)
     inspect_stl(sys.argv[4],obs)
