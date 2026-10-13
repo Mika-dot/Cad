@@ -126,7 +126,10 @@ internal sealed partial class HexFem
                 _rhs[node]+=f.X;_rhs[node+1]+=f.Y;_rhs[node+2]+=f.Z;
                 netForce+=Math.Abs(f.X)+Math.Abs(f.Y)+Math.Abs(f.Z);
             }
-            if(netForce<1e-8)throw new ArgumentException("No force was applied to the loaded region.");
+            if(netForce<1e-8 &&
+               (boundaryPressures is null||boundaryPressures.Count==0)&&
+               (trianglePressures is null||trianglePressures.Count==0))
+                throw new ArgumentException("No force was applied to the loaded region.");
         }
         if(boundaryPressures is not null)
         {
