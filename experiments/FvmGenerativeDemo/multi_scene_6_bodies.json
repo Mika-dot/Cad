@@ -25,14 +25,19 @@
     "youngMpa": 200000,
     "poisson": 0.3,
     "densityKgM3": 7850,
-    "thermalConductivityWmK": 45
+    "thermalConductivityWmK": 45,
+    "alphaPerK": 0.000012
   },
   "limits": {
     "vonMisesMpa": 500,
     "displacementMm": 0.8,
     "minFirstFrequencyHz": 5,
     "maxImpactDisplacementMm": 2.5,
-    "minThermalConductanceWPerK": 0.00015
+    "minThermalConductanceWPerK": 0.00015,
+    "maxThermalVonMisesMpa": 1000,
+    "maxThermalDisplacementMm": 3,
+    "maxHarmonicDisplacementMm": 3,
+    "maxFatigueDamage": 1
   },
   "impact": {
     "halfSinePulseSeconds": 0.002,
@@ -41,7 +46,11 @@
   },
   "thermal": {
     "hotBody": "load-box",
-    "coldBody": "fixed-sphere"
+    "coldBody": "fixed-sphere",
+    "expansionPerK": 0.000012,
+    "hotKelvin": 373.15,
+    "coldKelvin": 293.15,
+    "referenceKelvin": 293.15
   },
   "bodies": [
     {
@@ -253,5 +262,15 @@
         ]
       }
     }
-  ]
+  ],
+  "harmonic": {
+    "frequencyHz": 300,
+    "dampingRatio": 0.03
+  },
+  "fatigueScreen": {
+    "cycles": 1000000,
+    "referenceLifeCycles": 2000000,
+    "referenceStressMpa": 250,
+    "basquinExponent": 5
+  }
 }
