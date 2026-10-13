@@ -132,9 +132,49 @@ internal sealed class UniversalScene
     internal readonly List<(string Name,Dictionary<string,Point3> Loads)> LoadCases=new();
     internal readonly Dictionary<string,List<HexTrianglePressure>> SurfacePressureCases=new(
         StringComparer.Ordinal);
+    internal bool PressureContactVoidEnabled {get;private set;}=true;
     internal IReadOnlyList<HexTrianglePressure> PressureFor(string name)=>
         SurfacePressureCases.TryGetValue(name,out var triangles)
             ?triangles:Array.Empty<HexTrianglePressure>();
+    // Implicit excluded half-prism OUTSIDE each user-loaded STL triangle,
+    // so a free-density field cannot bury its physical pressure face.
+    // Signed distance to triangle-edge lines gives a continuous CSG cap.
+    // No claim of certified continuous contact geometry.
+    internal double PressureContactVoid(Point3 p,double lateralMarginMm)
+    {
+        if(!PressureContactVoidEnabled||SurfacePressureCases.Count==0)
+            return double.PositiveInfinity;
+        double cap=double.PositiveInfinity;
+        foreach(var triangles in SurfacePressureCases.Values)
+            foreach(var triangle in triangles)
+            {
+                var e0=triangle.B-triangle.A;
+                var e1=triangle.C-triangle.A;
+                var norm=Point3.Cross(e0,e1);
+                var twice=norm.Norm();
+                var n=norm*(1/twice);
+                var signed=Point3.Dot(p-triangle.A,n);
+                var v=p-triangle.A;
+                var d00=Point3.Dot(e0,e0);
+                var d01=Point3.Dot(e0,e1);
+                var d11=Point3.Dot(e1,e1);
+                var d20=Point3.Dot(v,e0);
+                var d21=Point3.Dot(v,e1);
+                var det=d00*d11-d01*d01;
+                var u=(d11*d20-d01*d21)/det;
+                var w=(d00*d21-d01*d20)/det;
+                var b0=1-u-w;
+                var toEdge=Math.Min(
+                    b0*twice/(triangle.C-triangle.B).Norm(),
+                    Math.Min(u*twice/(triangle.C-triangle.A).Norm(),
+                             w*twice/e0.Norm()));
+                // Forbidden = signed>0 AND toEdge+margin>0.
+                // Material cap = -min(signed,toEdge+margin).
+                cap=Math.Min(cap,Math.Max(-signed,-toEdge-lateralMarginMm));
+            }
+        return cap;
+    }
+
     // The patch must remain on an EXPOSED material-to-void interface
     // in the actual designed field, not merely on the source CAD body.
     // This is a finite-sample engineering guard, not an exact contact theorem.
@@ -280,7 +320,9 @@ internal sealed class UniversalScene
             ProjectionBeta=Scalar(j,"projectionBeta",0),
             AutoTruss=j.TryGetProperty("autoTruss",out var autoTruss)&&autoTruss.GetBoolean(),
             TrussOffsetMm=Scalar(j,"trussOffsetMm",Scalar(j,"bridgeRadiusMm",4)*1.4),
-            AssertDetour=j.TryGetProperty("assertDetour",out var flag)&&flag.GetBoolean()
+            AssertDetour=j.TryGetProperty("assertDetour",out var flag)&&flag.GetBoolean(),
+            PressureContactVoidEnabled=!j.TryGetProperty("pressureContactVoid",out var contact)||
+                contact.GetBoolean()
         };
         if(j.TryGetProperty("femCells",out var cells))
         {
