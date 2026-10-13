@@ -116,6 +116,14 @@ internal static class UniversalDesign
         {
             var field=new UniversalField(scene,branches,p);
             var model=field.Sample();
+            // No invisible "pressure in the middle of solid": the user STL
+            // patch must bound material on the inside and void on the outside
+            // in BOTH the five-M and direct analytic geometry being evaluated.
+            if(!scene.PressureSurfacesExposed(q=>
+                useM?model.Approximate(new[]{q.X,q.Y,q.Z}):field.Value(q),
+                Math.Max(.5,scene.FvmStep*.5)))
+                throw new ArithmeticException(
+                    "STL pressure face became buried, reversed, or removed in designed material.");
             // Check solid at all physically prescribed support and load nodes.
             foreach(var c in xcoords)
             {
