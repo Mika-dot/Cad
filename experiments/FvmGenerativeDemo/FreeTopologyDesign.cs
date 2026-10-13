@@ -705,7 +705,8 @@ internal static class FreeTopologyDesign
             "BINARY FEM PASS: V={0:F2} mm3, VM={1:F3} MPa, u={2:F6} mm, C={3:F5} Nmm (actual 5M material/void classification)",
             finalBinary.Volume,finalBinary.Stress,finalBinary.Displacement,finalBinary.Compliance));
         File.WriteAllLines(Path.Combine(outDir,"metrics.csv"),metrics);
-        TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"optimized.stl"),current.M,null);
+        TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"optimized.stl"),
+            current.M,null,pruneTinyShellFraction:1e-4);
         using(var writer=new StreamWriter(Path.Combine(outDir,"density.csv")))
         {
             writer.WriteLine("cell,x_mm,y_mm,z_mm,raw_density,filtered_density,locked");
