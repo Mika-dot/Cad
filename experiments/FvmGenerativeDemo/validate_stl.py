@@ -28,9 +28,11 @@ def analyze(file: Path):
                 vertices=[]
     assert not vertices, "Incomplete STL triangle"
     assert len(triangles)>1000, f"Too few facets: {len(triangles)}"
-    # STL writes G9; round-trip to 1e-4mm is ample for 2mm marching cells.
+    # Exporter writes G17. Earlier rounding to 1e-4 mm falsely merged
+    # distinct tiny mesh vertices (and invented degenerate facets).
+    # Use the same 1e-9 mm topological vertex quantization as the exporter.
     def key(p: Vec):
-        return tuple(round(v,4) for v in p)
+        return tuple(round(v,9) for v in p)
     edge_count=Counter()
     edge_orient=Counter()
     edge_owners=defaultdict(list)
