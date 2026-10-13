@@ -64,3 +64,19 @@ expect_failure("unknown pressure load case",wrong_case,"unknown load case")
 expect_failure("attempt to pressure-load fixed body",fixed,"nonfixed body")
 expect_failure("zero MPa pressure",zero_pressure,"nonzero")
 print("PASS five malformed surface-loading scenes rejected")
+
+# Free density starts as a nearly solid filled design region. The exposed
+# pressure patch from the SOURCE box can therefore become buried beneath
+# extra design material. Such a pressure-only FEM must NOT quietly accept
+# an internal artificial load as if it were an external surface traction.
+with tempfile.TemporaryDirectory(prefix="fvm_pressure_buried_") as tmp:
+    output=Path(tmp)/"output"
+    cmd=["dotnet",str(dll),"--free-topology",str(scene_file),
+         "--iterations","1","--out",str(output)]
+    run=subprocess.run(cmd,capture_output=True,text=True,timeout=90)
+    log=run.stdout+"\n"+run.stderr
+    assert run.returncode!=0,("Buried pressure surface was incorrectly accepted",log[-2200:])
+    assert "pressure face is buried" in log.lower(),log[-2200:]
+    assert not (output/"optimized.stl").exists(),"Invalid buried-load STL exported"
+    print("PASS free-density rejects a surface-pressure patch buried by design material")
+
