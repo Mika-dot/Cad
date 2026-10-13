@@ -205,59 +205,6 @@ internal sealed partial class HexFem
         }
     }
 
-    // Immersed oriented pressure patch in physical mm coordinates.
-    // A triangle is integrated with 3 barycentric Gauss points:
-    // f_a = ∫_triangle N_a(x) p n dS (N_a = background Hex8 shape).
-    // The arbitrary surface need not coincide with element faces.
-    // Where it crosses an element boundary, integration is an approximation:
-    // source triangulation and background mesh need independent refinement.
-    private void ApplyTrianglePressure(HexTrianglePressure triangle)
-    {
-        if(!double.IsFinite(triangle.PressureMpa)||triangle.PressureMpa==0)
-            throw new ArgumentException("Triangle pressure must be finite and nonzero (MPa).");
-        var a=triangle.A;var b=triangle.B;var c=triangle.C;
-        var cross=Point3.Cross(b-a,c-a);
-        var areaTwice=cross.Norm();
-        if(!double.IsFinite(areaTwice)||areaTwice<1e-12)
-            throw new ArgumentException("Pressure patch contains a degenerate triangle.");
-        // Enforce domain inclusion rather than silently losing applied force.
-        void CheckPoint(Point3 p)
-        {
-            var eps=1e-8*Math.Max(1,Math.Max(_hx,Math.Max(_hy,_hz)));
-            if(p.X<_x0-eps||p.X>_x0+_nx*_hx+eps||
-               p.Y<_y0-eps||p.Y>_y0+_ny*_hy+eps||
-               p.Z<_z0-eps||p.Z>_z0+_nz*_hz+eps)
-                throw new ArgumentException("Pressure patch triangle lies outside FEM bounding box.");
-        }
-        CheckPoint(a);CheckPoint(b);CheckPoint(c);
-        var traction=cross*(triangle.PressureMpa/areaTwice);
-        // The quadrature weights for each point are 1/3.
-        foreach(var bary in new[]{(2.0/3,1.0/6,1.0/6),
-                                   (1.0/6,2.0/3,1.0/6),
-                                   (1.0/6,1.0/6,2.0/3)})
-        {
-            var p=a*bary.Item1+b*bary.Item2+c*bary.Item3;
-            var x=Math.Clamp((p.X-_x0)/_hx,0,_nx);
-            var y=Math.Clamp((p.Y-_y0)/_hy,0,_ny);
-            var z=Math.Clamp((p.Z-_z0)/_hz,0,_nz);
-            var i=Math.Min(_nx-1,(int)Math.Floor(x));
-            var j=Math.Min(_ny-1,(int)Math.Floor(y));
-            var k=Math.Min(_nz-1,(int)Math.Floor(z));
-            var xi=2*(x-i)-1;var eta=2*(y-j)-1;var zeta=2*(z-k)-1;
-            for(var q=0;q<8;q++)
-            {
-                var node=Node(i+Corners[q].X,j+Corners[q].Y,k+Corners[q].Z);
-                var N=(1+(2*Corners[q].X-1)*xi)*
-                      (1+(2*Corners[q].Y-1)*eta)*
-                      (1+(2*Corners[q].Z-1)*zeta)/8;
-                var weight=areaTwice*.5/3*N;
-                _rhs[3*node]+=weight*traction.X;
-                _rhs[3*node+1]+=weight*traction.Y;
-                _rhs[3*node+2]+=weight*traction.Z;
-            }
-        }
-    }
-
     internal (double X,double Y,double Z) AppliedResultantN
     {
         get
