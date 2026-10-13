@@ -58,6 +58,43 @@ internal static class MultiphysicsSelfTest
               Math.Abs(reactions.ReactionZN-2000)<1e-4,
               "Mixed X/Y/Z surface pressures must balance all applied forces, including supported face nodes");
 
+        // The same exact physical pressure integrated over arbitrary triangle
+        // patches. This exercises background Hex8 interpolation instead of
+        // relying on an axis-aligned face selector.
+        foreach(var (axialCells,faceCells) in new[]{(4,1),(8,2),(16,4)})
+        {
+            var patch=new List<HexTrianglePressure>();
+            var increment=10.0/faceCells;
+            for(var j=0;j<faceCells;j++)for(var k=0;k<faceCells;k++)
+            {
+                var y0=j*increment;var y1=(j+1)*increment;
+                var z0=k*increment;var z1=(k+1)*increment;
+                var a=new Point3(length,y0,z0);
+                var b=new Point3(length,y1,z0);
+                var c=new Point3(length,y1,z1);
+                var d=new Point3(length,y0,z1);
+                patch.Add(new HexTrianglePressure(a,b,c,force/area));
+                patch.Add(new HexTrianglePressure(a,c,d,force/area));
+            }
+            var immersed=new HexFem(axialCells,faceCells,faceCells,
+                0,0,0,length/axialCells,increment,increment,
+                e,0,(_x,_y,_z)=>1,null,loadN:0,interfaceHalfWidth:0,
+                emin:1e-5,epsF:.1,trianglePressures:patch);
+            var applied=immersed.AppliedResultantN;
+            Check(Math.Abs(applied.X-force)<1e-9 &&
+                  Math.Abs(applied.Y)<1e-9 &&
+                  Math.Abs(applied.Z)<1e-9,
+                  "Immersed triangular surface quadrature must conserve total pressure force");
+            var result=immersed.Solve();
+            Check(Math.Abs(result.ReactionXN+force)<2e-5 &&
+                  Math.Abs(result.MaxDisplacementMm-expected)<2e-6 &&
+                  Math.Abs(result.MaxVonMisesMpa-force/area)<.002,
+                  "Triangulated surface pressure must agree with axial bar analytic reference");
+            Console.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "TRIANGULATED SURFACE PRESSURE PASS: {0}x{1}x{1} mesh, triangles={2}, Fx={3:G9}N, Rx={4:G9}N, u={5:G9}mm",
+                axialCells,faceCells,patch.Count,applied.X,result.ReactionXN,result.MaxDisplacementMm));
+        }
+
         var thermal=fem.ThermalConductance(45,
             (x,y,z)=>x>=length-1e-8,
             (x,y,z)=>x<=1e-8);
