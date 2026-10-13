@@ -70,8 +70,16 @@ print("PASS five malformed surface-loading scenes rejected")
 # extra design material. Such a pressure-only FEM must NOT quietly accept
 # an internal artificial load as if it were an external surface traction.
 with tempfile.TemporaryDirectory(prefix="fvm_pressure_buried_") as tmp:
-    output=Path(tmp)/"output"
-    cmd=["dotnet",str(dll),"--free-topology",str(scene_file),
+    directory=Path(tmp)
+    output=directory/"output"
+    # Suppress the *new* automatic pressure-contact access cavity on purpose.
+    # The formerly incorrect geometry must still be rejected fail-closed.
+    legacy=json.loads(json.dumps(root))
+    legacy["pressureContactVoid"]=False
+    (directory/source_stl.name).write_bytes(source_stl.read_bytes())
+    config=directory/"buried.json"
+    config.write_text(json.dumps(legacy),encoding="utf8")
+    cmd=["dotnet",str(dll),"--free-topology",str(config),
          "--iterations","1","--out",str(output)]
     run=subprocess.run(cmd,capture_output=True,text=True,timeout=90)
     log=run.stdout+"\n"+run.stderr
