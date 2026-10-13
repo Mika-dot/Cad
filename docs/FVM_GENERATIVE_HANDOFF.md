@@ -1,5 +1,33 @@
 # Быстрый вход — ФВМ + FEM + генеративное проектирование
 
+> **Новое 13.10.2026 — ПОВЕРХНОСТНЫЕ НАГРУЗКИ:**
+> [FVM_SURFACE_PRESSURE_IMPLEMENTATION.md](FVM_SURFACE_PRESSURE_IMPLEMENTATION.md)
+> описывает настоящие Hex8 Gauss surface traction и
+> произвольные ориентированные ASCII/Binary STL pressure patch.
+> В `UniversalScene` появился массив `surfacePressurePatches`:
+> `loadCase`, `bodyId`, `stlFile`, `pressureMpa`;
+> он передаётся через `HexFem` и `UniversalDesign`, включая
+> независимый расчёт прямого F; нагрузка от PDF/STL
+> не подменяется объёмным распределением силы.
+> Реально выполнено: стержень p=10 МПа,
+> A=100 мм², L=100 мм, E=200000 МПа → F=1000 Н,
+> Rx=−1000 Н, u=0.005 мм, σ=10 МПа; Linux/Windows
+> [#38420106507](https://github.com/Mika-dot/Cad/actions/runs/38420106507)
+> 2/3/32 STL грани и несколько FEM сеток PASS.
+> CSG pressure-only: `multi_scene_surface_pressure.json`,
+> нагружена поверхность бокса из двух STL треугольников,
+> p=0.5 МПа, A=256 мм², F=128 Н,
+> [CI #38421658244](https://github.com/Mika-dot/Cad/actions/runs/38421658244)
+> PASS Windows/Linux и 6 негативных тестов.
+> Особо: в `FreeTopologyDesign` такая же STL-поверхностная
+> нагрузка математически может быть передана HexFem,
+> но если свободный density design **закрывает** её новым
+> материалом, схема физически недостоверна — добавлен явный
+> отказ без экспорта. Следующий шаг: гарантировать
+> свободную внешнюю контактную полость/плоскость на стадии
+> синтеза, а не разрешать внутреннее «давление».
+>
+
 > **АКТУАЛЬНОЕ СОСТОЯНИЕ ПОСЛЕ ДОПОЛНИТЕЛЬНОГО АУДИТА (13.10.2026).**
 > Все изменения в ветке `feature/fvm-generative-mechanics`.
 > Основная точка входа: `experiments/FvmGenerativeDemo/FreeTopologyDesign.cs`.
