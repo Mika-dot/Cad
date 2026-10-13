@@ -9,6 +9,7 @@ on:
       - 'experiments/FvmGenerativeDemo/HexFem.cs'
       - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
       - 'experiments/FvmGenerativeDemo/pressure_load_box_end.stl'
+      - 'experiments/FvmGenerativeDemo/test_surface_pressure_scenes.py'
       - '.github/workflows/fvm-surface-scene-ci.yml'
   workflow_dispatch:
 jobs:
@@ -28,6 +29,8 @@ jobs:
         run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
       - name: Validate exposed surface STL face and applied pressure
         run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --validate-scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json
+      - name: Reject invalid normals, non-exposed faces, wrong body/case and zero-pressure STL
+        run: python experiments/FvmGenerativeDemo/test_surface_pressure_scenes.py experiments/FvmGenerativeDemo/bin/Release/net8.0/FvmGenerativeDemo.dll experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json
       - name: Optimize connector with real STL pressure instead of lumped nodal forces
         run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --iterations 1 --self-test --out output/pressure-scene
       - name: Independently check volume, connected STL and keepout
