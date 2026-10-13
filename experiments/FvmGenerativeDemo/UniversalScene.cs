@@ -135,6 +135,9 @@ internal sealed class UniversalScene
     internal double RouteStep {get;private set;}
     internal double FvmStep {get;private set;}
     internal double BridgeRadius {get;private set;}
+    // Conservative reserve for interpolation/triangulation error, additionally
+    // to the user-required physical clearance. It is NOT a certified error bound.
+    internal double AvoidSafetyMm {get;private set;}
     internal int[] FemCells {get;private set;}=new[]{12,10,10};
     internal double Young {get;private set;}=200000;
     internal double Poisson {get;private set;}=.3;
@@ -182,6 +185,7 @@ internal sealed class UniversalScene
             RouteStep=Scalar(j,"routingStepMm",4),
             FvmStep=Scalar(j,"fvmStepMm",3),
             BridgeRadius=Scalar(j,"bridgeRadiusMm",4),
+            AvoidSafetyMm=Scalar(j,"surfaceSafetyMm",Math.Max(.25,Scalar(j,"fvmStepMm",3)*.3)),
             Iterations=Integer(j,"iterations",3),
             AssertDetour=j.TryGetProperty("assertDetour",out var flag)&&flag.GetBoolean()
         };
@@ -273,7 +277,7 @@ internal sealed class UniversalScene
     {
         var lengths=Max-Min;
         if(lengths.X<=0||lengths.Y<=0||lengths.Z<=0
-           ||RouteStep<=0||FvmStep<=0||BridgeRadius<=0||Young<=0
+           ||RouteStep<=0||FvmStep<=0||BridgeRadius<=0||AvoidSafetyMm<0||Young<=0
            ||Poisson<=-1||Poisson>=.5||StressLimit<=0||DisplacementLimit<=0
            ||Iterations<1||Iterations>20||ImpactPulseSeconds<=0||DampingRatio<0
            ||DampingRatio>1||DensityKgMm3<=0||ThermalConductivityWmK<=0
@@ -297,7 +301,7 @@ internal sealed class UniversalScene
         {
             if(b.Shape.F(b.Seed)<.1)throw new ArgumentException($"Seed '{b.Id}' is not inside material.");
             if(!Within(b.Seed))throw new ArgumentException($"Seed '{b.Id}' is outside bounds.");
-            if(Obstacles.Any(o=>o.Shape.F(b.Seed)>-o.Clearance))
+            if(Obstacles.Any(o=>o.Shape.F(b.Seed)>-o.Clearance-AvoidSafetyMm))
                 throw new ArgumentException($"Protected seed '{b.Id}' collides with keepout.");
         }
         foreach(var (name,forces) in LoadCases)
@@ -321,7 +325,7 @@ internal sealed class UniversalScene
     {
         double value=double.PositiveInfinity;
         foreach(var o in Obstacles)
-            value=Math.Min(value,-o.Shape.F(p)-o.Clearance);
+            value=Math.Min(value,-o.Shape.F(p)-o.Clearance-AvoidSafetyMm);
         return value; // positive means outside all expanded forbidden regions
     }
     // Path centreline must keep an entire bridge-radius clearance inside
@@ -511,7 +515,7 @@ internal sealed class UniversalField
             }
         }
         foreach(var obstacle in _scene.Obstacles)
-            value=Math.Min(value,-obstacle.Shape.F(point)-obstacle.Clearance);
+            value=Math.Min(value,-obstacle.Shape.F(point)-obstacle.Clearance-_scene.AvoidSafetyMm);
         return value;
     }
     internal FunctionalVoxelModel Sample()
