@@ -881,9 +881,9 @@ internal static class FreeTopologyDesign
                 lastRefinementRelativeVolumePercent=volumeChange,
                 lastRefinementRelativeStressPercent=stressChange,
                 lastRefinementRelativeDisplacementPercent=displacementChange,
-                maxAbsRefinementVolumePercent=transitions.Max(t=>Math.Abs(t.relativeVolumePercent)),
-                maxAbsRefinementStressPercent=transitions.Max(t=>Math.Abs(t.relativeStressPercent)),
-                maxAbsRefinementDisplacementPercent=transitions.Max(t=>Math.Abs(t.relativeDisplacementPercent)),
+                maxAbsRefinementVolumePercent=transitions.Select(t=>Math.Abs(t.relativeVolumePercent)).DefaultIfEmpty(0).Max(),
+                maxAbsRefinementStressPercent=transitions.Select(t=>Math.Abs(t.relativeStressPercent)).DefaultIfEmpty(0).Max(),
+                maxAbsRefinementDisplacementPercent=transitions.Select(t=>Math.Abs(t.relativeDisplacementPercent)).DefaultIfEmpty(0).Max(),
                 caveat="Requires BOTH sequential refinements within tolerance, but three background Hex8 levels do not prove convergence of stress near CSG/STL cut cells"
             };
             File.WriteAllText(Path.Combine(outDir,"mesh_refinement.json"),
