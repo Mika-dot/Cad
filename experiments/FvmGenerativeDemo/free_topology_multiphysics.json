@@ -151,7 +151,7 @@
     "hotBody": "loaded-box",
     "coldBody": "fixed-sphere",
     "expansionPerK": 0.000012,
-    "hotKelvin": 373.15,
+    "hotKelvin": 313.15,
     "coldKelvin": 293.15,
     "referenceKelvin": 293.15
   },
