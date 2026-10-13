@@ -146,6 +146,7 @@ internal sealed class UniversalScene
     internal double DensityKgMm3 {get;private set;}=7.85e-6;
     internal double MinFrequencyHz {get;private set;}=0;
     internal double MaxImpactDisplacementMm {get;private set;}=double.PositiveInfinity;
+    internal double MaxImpactVonMisesMpa {get;private set;}=double.PositiveInfinity;
     internal double ImpactPulseSeconds {get;private set;}=.001;
     internal double ImpactMultiplier {get;private set;}=2;
     internal double DampingRatio {get;private set;}=.02;
@@ -207,6 +208,7 @@ internal sealed class UniversalScene
             s.DisplacementLimit=Scalar(lim,"displacementMm",s.DisplacementLimit);
             s.MinFrequencyHz=Scalar(lim,"minFirstFrequencyHz",0);
             s.MaxImpactDisplacementMm=Scalar(lim,"maxImpactDisplacementMm",double.PositiveInfinity);
+            s.MaxImpactVonMisesMpa=Scalar(lim,"maxImpactVonMisesMpa",double.PositiveInfinity);
             s.MinThermalConductanceWPerK=Scalar(lim,"minThermalConductanceWPerK",0);
             s.MaxThermalStressMpa=Scalar(lim,"maxThermalVonMisesMpa",double.PositiveInfinity);
             s.MaxThermalDisplacementMm=Scalar(lim,"maxThermalDisplacementMm",double.PositiveInfinity);
@@ -286,6 +288,12 @@ internal sealed class UniversalScene
            ||FatigueReferenceStressMpa<=0||FatigueExponent<=0||FatigueCycles<0
            ||MaxFatigueDamage<=0)
             throw new ArgumentException("Invalid scene dimensions, material or optimization settings.");
+        if((double.IsFinite(MaxImpactDisplacementMm)&&MaxImpactDisplacementMm<=0)||
+            (double.IsFinite(MaxImpactVonMisesMpa)&&MaxImpactVonMisesMpa<=0)||
+            (double.IsFinite(MaxHarmonicDisplacementMm)&&MaxHarmonicDisplacementMm<=0)||
+            (double.IsFinite(MaxThermalStressMpa)&&MaxThermalStressMpa<=0)||
+            (double.IsFinite(MaxThermalDisplacementMm)&&MaxThermalDisplacementMm<=0))
+            throw new ArgumentException("Non-positive multiphysics limit.");
         if(FemCells.Any(c=>c<3||c>25))throw new ArgumentException("femCells must be 3..25 per axis.");
         var nb=new[]{lengths.X/RouteStep,lengths.Y/RouteStep,lengths.Z/RouteStep};
         if(nb.Aggregate(1.0,(v,n)=>v*(n+2))>100000)
