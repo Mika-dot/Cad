@@ -39,6 +39,28 @@ jobs:
           print("PASS mesh refinement report:",report["entries"])
           print("MESH CONVERGENCE SCREEN:",report["convergenceScreenPassed"])
           PY
+      - name: Require explicit failure when three-grid stress convergence is not demonstrated
+        run: |
+          python - <<'PY'
+          import json, subprocess, pathlib
+          base=pathlib.Path("output/multiphysics")
+          result=json.loads((base/"mesh_refinement.json").read_text())
+          if result["convergenceScreenPassed"] is not False:
+              raise RuntimeError("Expected regression fixture to demonstrate a non-converged FEM stress estimate")
+          args=[
+              "dotnet","run","--project","experiments/FvmGenerativeDemo",
+              "-c","Release","--no-build","--",
+              "--free-topology","experiments/FvmGenerativeDemo/free_topology_multiphysics.json",
+              "--iterations","1","--gradient-check","--refinement-report",
+              "--require-mesh-convergence","--out","output/nonconverged-rejection"
+          ]
+          p=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=180)
+          assert p.returncode!=0, "Nonconverged FEM was wrongly accepted as verified"
+          assert "MESH CONVERGENCE NOT DEMONSTRATED" in p.stdout,p.stdout[-2500:]
+          assert not pathlib.Path("output/nonconverged-rejection/optimized.stl").exists(),(
+              "Unsafe nonconverged STL was exported")
+          print("PASS: strict FEM convergence gate refuses nonconverged output")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
