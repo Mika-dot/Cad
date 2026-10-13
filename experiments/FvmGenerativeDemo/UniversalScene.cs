@@ -169,6 +169,8 @@ internal sealed class UniversalScene
     internal double FatigueExponent {get;private set;}=5;
     internal double MaxFatigueDamage {get;private set;}=1;
     internal int Iterations {get;private set;}=3;
+    internal bool AutoTruss {get;private set;}=false;
+    internal double TrussOffsetMm {get;private set;}
     internal bool AssertDetour {get;private set;}=false;
     private static double Scalar(JsonElement e,string prop,double fallback)=>
         e.TryGetProperty(prop,out var v)?v.GetDouble():fallback;
@@ -188,6 +190,8 @@ internal sealed class UniversalScene
             BridgeRadius=Scalar(j,"bridgeRadiusMm",4),
             AvoidSafetyMm=Scalar(j,"surfaceSafetyMm",Math.Max(.25,Scalar(j,"fvmStepMm",3)*.3)),
             Iterations=Integer(j,"iterations",3),
+            AutoTruss=j.TryGetProperty("autoTruss",out var autoTruss)&&autoTruss.GetBoolean(),
+            TrussOffsetMm=Scalar(j,"trussOffsetMm",Scalar(j,"bridgeRadiusMm",4)*1.4),
             AssertDetour=j.TryGetProperty("assertDetour",out var flag)&&flag.GetBoolean()
         };
         if(j.TryGetProperty("femCells",out var cells))
@@ -279,7 +283,7 @@ internal sealed class UniversalScene
     {
         var lengths=Max-Min;
         if(lengths.X<=0||lengths.Y<=0||lengths.Z<=0
-           ||RouteStep<=0||FvmStep<=0||BridgeRadius<=0||AvoidSafetyMm<0||Young<=0
+           ||RouteStep<=0||FvmStep<=0||BridgeRadius<=0||TrussOffsetMm<=0||AvoidSafetyMm<0||Young<=0
            ||Poisson<=-1||Poisson>=.5||StressLimit<=0||DisplacementLimit<=0
            ||Iterations<1||Iterations>20||ImpactPulseSeconds<=0||DampingRatio<0
            ||DampingRatio>1||DensityKgMm3<=0||ThermalConductivityWmK<=0
@@ -347,6 +351,7 @@ internal sealed class UniversalScene
 internal sealed class RoutedBranch
 {
     internal required UniversalBody Target;
+    internal string Kind="route";
     internal readonly List<Point3> Polyline=new();
 }
 
@@ -407,6 +412,41 @@ internal sealed class MultiTerminalRouter
         if(best<0)throw new InvalidOperationException("A terminal cannot be snapped to a safe route node.");
         return best;
     }
+    // Optional geometry synthesis: grow two triangular out-of-axis braces
+    // on physically safe straight member spans. Not density-SIMP and NOT
+    // unconstrained topology optimization: these are new FEM-checked
+    // candidate edges whose radii can subsequently be optimized.
+    internal List<RoutedBranch> AutoBrace(List<RoutedBranch> routed)
+    {
+        var braces=new List<RoutedBranch>();
+        foreach(var route in routed)
+        {
+            var line=route.Polyline;
+            for(int i=1;i<line.Count;i++)
+            {
+                var a=line[i-1];var b=line[i];var d=b-a;
+                var length=d.Norm();
+                if(length<_s.BridgeRadius*5)continue;
+                var axis=d*(1/length);
+                var reference=Math.Abs(axis.Z)<.85
+                    ?new Point3(0,0,1):new Point3(0,1,0);
+                var perpendicular=Point3.Cross(axis,reference);
+                var norm=perpendicular.Norm();
+                if(norm<1e-8)continue;
+                perpendicular=perpendicular*(1/norm);
+                for(int side=-1;side<=1;side+=2)
+                {
+                    var midpoint=(a+b)*.5+perpendicular*(side*_s.TrussOffsetMm);
+                    if(!SegmentFree(a,midpoint)||!SegmentFree(midpoint,b))continue;
+                    var brace=new RoutedBranch{Target=route.Target,Kind="auto-truss"};
+                    brace.Polyline.Add(a);brace.Polyline.Add(midpoint);brace.Polyline.Add(b);
+                    braces.Add(brace);
+                }
+            }
+        }
+        return braces;
+    }
+
     internal List<RoutedBranch> Route()
     {
         var root=_s.Bodies.First(b=>b.Role=="fixed");
@@ -519,7 +559,9 @@ internal sealed class UniversalField
         for(var b=0;b<Branches.Count;b++)
         {
             var path=Branches[b].Polyline;
-            var r=_scene.BridgeRadius+P[b];
+            var baseline=Branches[b].Kind=="auto-truss"?.5*_scene.BridgeRadius:_scene.BridgeRadius;
+            var r=baseline+P[b];
+            if(r<=0)continue;
             for(var i=1;i<path.Count;i++)
             {
                 var start=path[i-1];var delta=path[i]-start;
