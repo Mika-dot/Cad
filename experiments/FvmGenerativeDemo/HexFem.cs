@@ -4,6 +4,9 @@ namespace FvmGenerativeDemo;
 
 // All dimensions in mm, forces in N, Young's modulus and stress in N/mm²=MPa.
 // Standard trilinear 8-node displacement element, 2x2x2 Gauss integration.
+// Axis-aligned face pressure in MPa = N/mm^2, acting along the outward
+// normal of an EXTERIOR FEM grid face. Not a traction on arbitrary STL/CSG.
+internal sealed record HexBoundaryPressure(string Face,double PressureMpa);
 internal sealed partial class HexFem
 {
     private static readonly (int X, int Y, int Z)[] Corners =
@@ -43,7 +46,8 @@ internal sealed partial class HexFem
         double loadN, double interfaceHalfWidth, double emin = 1e-5, double epsF = 30,
         Func<double,double,double,bool>? support = null,
         Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null,
-        double densityKgMm3=7.85e-6,double simpPower=1)
+        double densityKgMm3=7.85e-6,double simpPower=1,
+        IReadOnlyList<HexBoundaryPressure>? boundaryPressures=null)
     {
         if (nx < 1 || ny < 1 || nz < 1 || hx <= 0 || hy <= 0 || hz <= 0 ||
             young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1 ||
@@ -80,9 +84,10 @@ internal sealed partial class HexFem
             if(supported<1)throw new ArgumentException("No nodes inside the prescribed support.");
         }
 
-        if(nodalForce is null)
+        if(nodalForce is null && (boundaryPressures is null || boundaryPressures.Count==0))
         {
-            // Consistent nodal traction in X on the preserved right-hand attachment.
+            // Historical point-distribution, preserved only for older scenes.
+            // For physical external face pressure use boundaryPressures.
             double totalWeight=0;
             for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
             {
@@ -100,7 +105,7 @@ internal sealed partial class HexFem
             }
     
         }
-        else
+        else if(nodalForce is not null)
         {
             double netForce=0;
             for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
@@ -111,6 +116,11 @@ internal sealed partial class HexFem
                 netForce+=Math.Abs(f.X)+Math.Abs(f.Y)+Math.Abs(f.Z);
             }
             if(netForce<1e-8)throw new ArgumentException("No force was applied to the loaded region.");
+        }
+        if(boundaryPressures is not null)
+        {
+            foreach(var pressure in boundaryPressures)
+                ApplyBoundaryPressure(pressure);
         }
         for(int i=0;i<nx;i++)for(int j=0;j<ny;j++)for(int k=0;k<nz;k++)
         {
@@ -129,6 +139,49 @@ internal sealed partial class HexFem
         {
             if(_fixed[a]) { _rhs[a]=0; _diag[a]=1; }
             if(_diag[a]<=0 || !double.IsFinite(_diag[a])) throw new ArithmeticException("Nonpositive stiffness diagonal.");
+        }
+    }
+
+    // Consistent Hex8 external surface load: f_a = ∫_face N_a p n dS.
+    // Exact for constant pressure on a rectangular face with 2x2 Gauss.
+    // The pressure is per ACTUAL exterior boundary area, not a node count.
+    private void ApplyBoundaryPressure(HexBoundaryPressure face)
+    {
+        if(!double.IsFinite(face.PressureMpa) || face.PressureMpa==0)
+            throw new ArgumentException("Boundary face pressure must be finite and nonzero (MPa).");
+        var axis=face.Face.ToLowerInvariant() switch
+        {
+            "xmin"=>0, "xmax"=>0,
+            "ymin"=>1, "ymax"=>1,
+            "zmin"=>2, "zmax"=>2,
+            _=>throw new ArgumentException(
+                "Pressure face must be xmin, xmax, ymin, ymax, zmin or zmax.")
+        };
+        var positive=face.Face.ToLowerInvariant().EndsWith("max",StringComparison.Ordinal);
+        var sign=positive?1.0:-1.0;
+        var count=axis==0?_nx:axis==1?_ny:_nz;
+        var plane=positive?count-1:0;
+        var area=axis==0?_hy*_hz:axis==1?_hx*_hz:_hx*_hy;
+        var normalPressure=face.PressureMpa*sign;
+        for(int i=0;i<_nx;i++)for(int j=0;j<_ny;j++)for(int k=0;k<_nz;k++)
+        {
+            if((axis==0?i:axis==1?j:k)!=plane)continue;
+            foreach(var g1 in Gauss)foreach(var g2 in Gauss)
+            {
+                var param1=axis==0?1:0;var param2=axis==2?1:2;
+                if(axis==1){param1=0;param2=2;}
+                for(int a=0;a<8;a++)
+                {
+                    var c=Corners[a];
+                    var loc=new[]{c.X,c.Y,c.Z};
+                    if(loc[axis]!=(positive?1:0))continue;
+                    var s1=2*loc[param1]-1;
+                    var s2=2*loc[param2]-1;
+                    var shape=.25*(1+s1*g1)*(1+s2*g2);
+                    var node=Node(i+c.X,j+c.Y,k+c.Z);
+                    _rhs[3*node+axis]+=normalPressure*area*.25*shape;
+                }
+            }
         }
     }
 
