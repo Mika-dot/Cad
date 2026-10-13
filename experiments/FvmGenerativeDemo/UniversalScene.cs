@@ -177,6 +177,55 @@ internal sealed class UniversalScene
     private static int Integer(JsonElement e,string prop,int fallback)=>
         e.TryGetProperty(prop,out var v)?v.GetInt32():fallback;
 
+    // User supplies geometry and BCs; a manual seed per body is optional.
+    // Find an interior point first from primitive geometry, then by searching
+    // the bounded domain. This is a convenience heuristic, not a proof that
+    // arbitrary thin/concave meshes always have a discoverable interior.
+    private static Point3 InferSeed(JsonElement json,ImplicitSolid solid,
+        Point3 lo,Point3 hi)
+    {
+        var candidates=new List<Point3>();
+        if(json.TryGetProperty("center",out var c))
+        {
+            var centre=ImplicitSolid.Vec(c);
+            candidates.Add(centre);
+            if(json.TryGetProperty("majorRadius",out var major))
+                candidates.Add(centre+new Point3(major.GetDouble(),0,0));
+        }
+        if(json.TryGetProperty("a",out var a)&&json.TryGetProperty("b",out var b))
+            candidates.Add((ImplicitSolid.Vec(a)+ImplicitSolid.Vec(b))*.5);
+        if(json.TryGetProperty("children",out var children)&&children.GetArrayLength()>0)
+        {
+            var first=children[0];
+            if(first.TryGetProperty("center",out var firstCenter))
+                candidates.Add(ImplicitSolid.Vec(firstCenter));
+        }
+        if(solid is ImplicitMesh mesh)candidates.Add(mesh.BoundingCentre);
+        candidates.Add((lo+hi)*.5);
+        var best=double.NegativeInfinity;var result=candidates[0];
+        foreach(var p in candidates)
+        {
+            var f=solid.F(p);
+            if(f>best){best=f;result=p;}
+        }
+        if(best>=.1)return result;
+        for(int density=9;density<=33;density+=8)
+        {
+            for(int i=0;i<density;i++)for(int j=0;j<density;j++)for(int k=0;k<density;k++)
+            {
+                var p=new Point3(lo.X+(hi.X-lo.X)*(i+.5)/density,
+                    lo.Y+(hi.Y-lo.Y)*(j+.5)/density,
+                    lo.Z+(hi.Z-lo.Z)*(k+.5)/density);
+                var v=solid.F(p);
+                if(v>best){best=v;result=p;}
+            }
+            if(best>=.1)return result;
+        }
+        throw new ArgumentException(
+            "Failed to find interior seed automatically; specify 'seed' "+
+            "for this thin, hollow or otherwise difficult input body.");
+    }
+
     internal static UniversalScene Load(string file)
     {
         ImplicitSolid.SceneDirectory=Path.GetDirectoryName(Path.GetFullPath(file))!;
@@ -251,7 +300,10 @@ internal sealed class UniversalScene
             var id=b.GetProperty("id").GetString()??throw new ArgumentException("Missing id.");
             var role=b.GetProperty("role").GetString()?.ToLowerInvariant()??"anchor";
             var shape=ImplicitSolid.Parse(b.GetProperty("shape"));
-            var seed=ImplicitSolid.Vec(b.GetProperty("seed"));
+            var userSeed=b.TryGetProperty("seed",out var seedJson);
+            var seed=userSeed?ImplicitSolid.Vec(seedJson):
+                InferSeed(b.GetProperty("shape"),shape,s.Min,s.Max);
+            if(!userSeed)Console.WriteLine($"AUTO-SEED: {id} = {seed.X:G5},{seed.Y:G5},{seed.Z:G5} mm");
             var force=b.TryGetProperty("forceN",out var l)?ImplicitSolid.Vec(l):new Point3(0,0,0);
             if(role is not ("fixed" or "anchor" or "load"))
                 throw new ArgumentException($"Unknown body role '{role}'.");
