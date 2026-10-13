@@ -137,3 +137,38 @@ STL 19727.932 → 15095.696 мм³ (−23.481%).
 ## Предлагаемое расширение: несколько физических воздействий
 
 Математическая концепция в отдельном [FVM_MULTIPHYSICS_GENERATIVE_DESIGN.md](../../docs/FVM_MULTIPHYSICS_GENERATIVE_DESIGN.md): не только статическая сила, но также вибрации, удар, нагрев, термоупругость, усталость, потеря устойчивости, сценарная надёжность, связанная тепло-динамическая физика, единый adjoint-подход и геометрические «конверты» неопределённости пяти М-образов. **Это ещё НЕ функции данной версии C#**, а план расширения с формулами и критериями численных доказательств.
+
+
+## Универсальный режим: много тел, избегание, STL и мультифизика (13.10.2026)
+
+**Новый основной запуск:** [полное практическое руководство](../../docs/FVM_UNIVERSAL_MULTIPHYSICS_IMPLEMENTATION.md).
+Существующий `--two-spheres` сохранён для регрессии; новая точка входа
+`--multi-scene <json>`.
+
+```powershell
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --multiphysics-self-test
+
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_6_bodies.json --iterations 2 --out output/multi-six
+
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_forced_detour.json --iterations 1 --out output/detour
+
+python experiments/FvmGenerativeDemo/validate_stl.py output/detour/initial.stl output/detour/optimized.stl
+python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_forced_detour.json output/detour/routes.csv output/detour/initial.stl output/detour/optimized.stl
+```
+
+Поддержаны 2–32 отдельных CSG/STL тела, несколько фиксированных и нагружаемых
+областей, произвольные обязательные якоря, forbidden CSG-объёмы и
+заданные зазоры. CSG: sphere, box, ellipsoid, capsule, cylinder, torus,
+union/intersection/difference, входной замкнутый ASCII/binary STL.
+Автоматически строится дерево соединений с обходом препятствий.
+Пять M создаются из одного неявного поля F и его градиентов.
+
+**Реально исполняемые физические блоки**:
+статические Hex8 FEM-режимы, первая собственная частота, первомодовый
+гармонический отклик, линейная переходная реакция на импульс силы Newmark,
+3D стационарная теплопроводность, последовательная термоупругость,
+проверка усталости по упрощённой Basquin S–N. Это **не** реализация
+контактного удара, rainflow по реальному спектру, многомодовой FRF,
+buckling, STEP-BREP или полного нелинейного многополевого решателя.
+Результаты проверяются на M и прямом F с **той же** FEM сеткой,
+что не гарантирует сходимость физической задачи.
