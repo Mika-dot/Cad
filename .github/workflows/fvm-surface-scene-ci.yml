@@ -46,7 +46,7 @@ jobs:
           python experiments/FvmGenerativeDemo/validate_stl.py output/free-pressure/initial.stl output/free-pressure/optimized.stl
           python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json output/free-pressure
       - name: Check three-level pressure-loaded binary FEM convergence indicators (report only, not certified)
-        run: python -c "import json,math; j=json.load(open('output/free-pressure/mesh_refinement.json')); assert j['coarseCells'] and j['refinedCells'] and j['convergenceScreenPassed'] in (True,False); assert all(math.isfinite(j[k]) for k in ('relativeVolumeChangePercent','relativeStressChangePercent','relativeDisplacementChangePercent')); print('PASS pressure-driven three-level FEM diagnostics:',j['convergenceScreenPassed'])"
+        run: python -c "import json,math; j=json.load(open('output/free-pressure/mesh_refinement.json')); assert len(j['entries'])==3 and j['convergenceScreenPassed'] in (True,False); assert all(math.isfinite(j[k]) for k in ('lastRefinementRelativeVolumePercent','lastRefinementRelativeStressPercent','lastRefinementRelativeDisplacementPercent')); print('PASS pressure-driven three-level FEM diagnostics:',j['convergenceScreenPassed'])"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
