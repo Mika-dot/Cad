@@ -1,0 +1,258 @@
+{
+  "name": "Six-body CSG bracket with two keep-outs",
+  "bounds": {
+    "min": [
+      -15,
+      -20,
+      -20
+    ],
+    "max": [
+      75,
+      53,
+      25
+    ]
+  },
+  "routingStepMm": 5,
+  "fvmStepMm": 3.3,
+  "bridgeRadiusMm": 4,
+  "femCells": [
+    11,
+    10,
+    7
+  ],
+  "iterations": 1,
+  "material": {
+    "youngMpa": 200000,
+    "poisson": 0.3,
+    "densityKgM3": 7850,
+    "thermalConductivityWmK": 45,
+    "alphaPerK": 0.000012
+  },
+  "limits": {
+    "vonMisesMpa": 500,
+    "displacementMm": 0.8,
+    "minFirstFrequencyHz": 5,
+    "maxImpactDisplacementMm": 2.5,
+    "minThermalConductanceWPerK": 0.00015,
+    "maxThermalVonMisesMpa": 1000,
+    "maxThermalDisplacementMm": 3,
+    "maxHarmonicDisplacementMm": 3,
+    "maxFatigueDamage": 1
+  },
+  "impact": {
+    "halfSinePulseSeconds": 0.002,
+    "peakForceMultiplier": 1.5,
+    "dampingRatio": 0.03
+  },
+  "thermal": {
+    "hotBody": "load-box",
+    "coldBody": "fixed-sphere",
+    "expansionPerK": 0.000012,
+    "hotKelvin": 373.15,
+    "coldKelvin": 293.15,
+    "referenceKelvin": 293.15
+  },
+  "bodies": [
+    {
+      "id": "fixed-sphere",
+      "role": "fixed",
+      "shape": {
+        "type": "sphere",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "radius": 9
+      }
+    },
+    {
+      "id": "fixed-box",
+      "role": "fixed",
+      "shape": {
+        "type": "box",
+        "center": [
+          0,
+          35,
+          0
+        ],
+        "halfSize": [
+          7,
+          8,
+          7
+        ]
+      }
+    },
+    {
+      "id": "load-box",
+      "role": "load",
+      "shape": {
+        "type": "box",
+        "center": [
+          63,
+          0,
+          0
+        ],
+        "halfSize": [
+          8,
+          8,
+          7
+        ]
+      },
+      "forceN": [
+        100,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "load-ellipsoid",
+      "role": "load",
+      "shape": {
+        "type": "ellipsoid",
+        "center": [
+          60,
+          38,
+          0
+        ],
+        "radii": [
+          9,
+          7,
+          7
+        ]
+      },
+      "forceN": [
+        -50,
+        -25,
+        0
+      ]
+    },
+    {
+      "id": "anchor-capsule",
+      "role": "anchor",
+      "seed": [
+        20,
+        36,
+        13
+      ],
+      "shape": {
+        "type": "capsule",
+        "a": [
+          15,
+          35,
+          10
+        ],
+        "b": [
+          25,
+          37,
+          16
+        ],
+        "radius": 5
+      }
+    },
+    {
+      "id": "anchor-cylinder",
+      "role": "anchor",
+      "seed": [
+        45,
+        -5,
+        16
+      ],
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          42,
+          -5,
+          12
+        ],
+        "b": [
+          48,
+          -5,
+          20
+        ],
+        "radius": 5
+      }
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "central-cylinder",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          31,
+          13,
+          -18
+        ],
+        "b": [
+          31,
+          13,
+          23
+        ],
+        "radius": 8
+      },
+      "clearanceMm": 1.5
+    },
+    {
+      "id": "lower-block",
+      "shape": {
+        "type": "box",
+        "center": [
+          38,
+          -6,
+          0
+        ],
+        "halfSize": [
+          6,
+          5,
+          10
+        ]
+      },
+      "clearanceMm": 1
+    }
+  ],
+  "loadCases": [
+    {
+      "name": "tension-and-bend",
+      "forcesN": {
+        "load-box": [
+          100,
+          0,
+          0
+        ],
+        "load-ellipsoid": [
+          0,
+          -35,
+          0
+        ]
+      }
+    },
+    {
+      "name": "reverse-load",
+      "forcesN": {
+        "load-box": [
+          -70,
+          15,
+          0
+        ],
+        "anchor-capsule": [
+          0,
+          20,
+          -10
+        ]
+      }
+    }
+  ],
+  "harmonic": {
+    "frequencyHz": 300,
+    "dampingRatio": 0.03
+  },
+  "fatigueScreen": {
+    "cycles": 1000000,
+    "referenceLifeCycles": 2000000,
+    "referenceStressMpa": 250,
+    "basquinExponent": 5
+  },
+  "autoTruss": true,
+  "trussOffsetMm": 6
+}
