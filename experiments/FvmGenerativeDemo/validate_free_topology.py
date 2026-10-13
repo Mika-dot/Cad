@@ -59,9 +59,10 @@ def validate(scene_path,results,require_void=False):
         return (a[1]*b[2]-a[2]*b[1],
                 a[2]*b[0]-a[0]*b[2],
                 a[0]*b[1]-a[1]*b[0])
-    def contains(point):
+    def contains(point,surface=None):
         hit=0
-        for a,b,c in triangles:
+        if surface is None:surface=triangles
+        for a,b,c in surface:
             edge1=sub(b,a);edge2=sub(c,a)
             h=cross(direction,edge2)
             det=dot(edge1,h)
@@ -165,6 +166,57 @@ def validate(scene_path,results,require_void=False):
                 p[axis]+=side*offsets[axis]
                 result.append(p)
         return result
+
+    # Independently validate that *printed* initial/optimized STL has
+    # a genuine open contact interface on each selected source STL patch.
+    # This is NOT the same field-based check as the C# solver: ray casting
+    # uses the final triangle soup in the exported manufacturing file.
+    if scene.get("surfacePressurePatches"):
+        def patch_triangles(path):
+            data=path.read_bytes()
+            result=[]
+            if len(data)>=84:
+                count=struct.unpack_from("<I",data,80)[0]
+                if count>0 and 84+50*count==len(data):
+                    for index in range(count):
+                        at=84+50*index
+                        result.append(tuple(
+                            struct.unpack_from("<fff",data,at+12+12*v)
+                            for v in range(3)))
+                    return result
+            vertices=[]
+            for row in data.decode("ascii").splitlines():
+                cols=row.strip().split()
+                if len(cols)==4 and cols[0].lower()=="vertex":
+                    vertices.append(tuple(map(float,cols[1:])))
+                    if len(vertices)==3:
+                        result.append(tuple(vertices));vertices=[]
+            assert result and not vertices,f"Invalid patch STL {path}"
+            return result
+        initial_triangles=patch_triangles(out/"initial.stl")
+        depth=max(.5,.5*scene["fvmStepMm"])
+        patch_checks=0
+        for entry in scene["surfacePressurePatches"]:
+            surface=patch_triangles(Path(scene_path).parent/entry["stlFile"])
+            for a,b,c in surface:
+                centroid=tuple((a[k]+b[k]+c[k])/3 for k in range(3))
+                normal=cross(sub(b,a),sub(c,a))
+                size=math.sqrt(dot(normal,normal))
+                assert size>1e-8,("Degenerate input pressure triangle",entry)
+                n=tuple(q/size for q in normal)
+                interior=tuple(centroid[k]-depth*n[k] for k in range(3))
+                exterior=tuple(centroid[k]+depth*n[k] for k in range(3))
+                for label,faces in (("initial",initial_triangles),
+                                    ("optimized",triangles)):
+                    assert contains(interior,faces),(
+                        f"{label} manufactured STL loses material behind "
+                        f"pressure interface {entry['stlFile']}")
+                    assert not contains(exterior,faces),(
+                        f"{label} manufactured STL buries external pressure "
+                        f"interface {entry['stlFile']}")
+                patch_checks+=1
+        print("PASS independently checked STL contact exposure on",
+              patch_checks,"physical pressure triangles, initial and optimized")
 
     checked=0;checked_points=0
     for body in scene["bodies"]:
