@@ -147,6 +147,7 @@ internal sealed class UniversalScene
     internal string? ThermalHotId {get;private set;}
     internal string? ThermalColdId {get;private set;}
     internal int Iterations {get;private set;}=3;
+    internal bool AssertDetour {get;private set;}=false;
     private static double Scalar(JsonElement e,string prop,double fallback)=>
         e.TryGetProperty(prop,out var v)?v.GetDouble():fallback;
     private static int Integer(JsonElement e,string prop,int fallback)=>
@@ -162,7 +163,8 @@ internal sealed class UniversalScene
             RouteStep=Scalar(j,"routingStepMm",4),
             FvmStep=Scalar(j,"fvmStepMm",3),
             BridgeRadius=Scalar(j,"bridgeRadiusMm",4),
-            Iterations=Integer(j,"iterations",3)
+            Iterations=Integer(j,"iterations",3),
+            AssertDetour=j.TryGetProperty("assertDetour",out var flag)&&flag.GetBoolean()
         };
         if(j.TryGetProperty("femCells",out var cells))
         {
