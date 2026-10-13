@@ -72,7 +72,7 @@ jobs:
       - name: Negative checks - fixed/load overlap and absent physical support
         run: python experiments/FvmGenerativeDemo/test_invalid_scenes.py experiments/FvmGenerativeDemo/bin/Release/net8.0/FvmGenerativeDemo.dll
       - name: Free field FVM topology optimization (no prescribed connectors)
-        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_3_bodies.json --iterations 3 --self-test --out experiments/FvmGenerativeDemo/output/free-topology
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_3_bodies.json --iterations 3 --gradient-check --self-test --out experiments/FvmGenerativeDemo/output/free-topology
       - name: Validate generated free topology STL and structural material saving
         run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/free-topology/initial.stl experiments/FvmGenerativeDemo/output/free-topology/optimized.stl
       - name: Run original five-M kernel tests
