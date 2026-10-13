@@ -82,6 +82,37 @@ def validate(scene_path,results,require_void=False):
     def fixture_samples(body):
         shape=body["shape"]
         kind=shape["type"]
+        if kind=="union":
+            # Every component of the required CSG union must survive.
+            # A single sample at the centroid could miss an entire lobe.
+            samples=[]
+            for child in shape["children"]:
+                samples.extend(fixture_samples({"id":body["id"],"shape":child}))
+            return samples
+        if kind in ("intersection","difference"):
+            # A complex Boolean requires an interior witness; a supplied seed
+            # is unambiguous for an arbitrary non-convex/eroded solid.
+            seed=body.get("seed")
+            if seed is not None:return [seed]
+            first=fixture_samples({"id":body["id"],"shape":shape["children"][0]})
+            # Analytic signed-geometry checks on simple primitives.
+            def primitive_inside(part,p):
+                t=part["type"]
+                if t=="sphere":
+                    return sum((p[k]-part["center"][k])**2 for k in range(3))<part["radius"]**2
+                if t=="box":
+                    return all(abs(p[k]-part["center"][k])<part["halfSize"][k] for k in range(3))
+                if t=="ellipsoid":
+                    return sum(((p[k]-part["center"][k])/part["radii"][k])**2 for k in range(3))<1
+                raise AssertionError("Complex intersect/difference requires explicit validation seed")
+            def inside_csg(p):
+                flags=[primitive_inside(c,p) for c in shape["children"]]
+                return all(flags) if kind=="intersection" else flags[0] and not any(flags[1:])
+            candidates=[p for p in first if inside_csg(p)]
+            assert candidates,(
+                f"No independent interior witness for CSG {body['id']}; "
+                "specify an interior seed in the test fixture")
+            return candidates
         centre=body.get("seed",shape.get("center"))
         if centre is None and "a" in shape and "b" in shape:
             centre=[(shape["a"][k]+shape["b"][k])*.5 for k in range(3)]
