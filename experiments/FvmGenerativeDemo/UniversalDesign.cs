@@ -155,7 +155,7 @@ internal static class UniversalDesign
                     (x,y,z)=>field.Value(new Point3(x,y,z)),useM?model:null,
                     loadN:0,interfaceHalfWidth:0,emin:1e-4,
                     epsF:Math.Max(0.75,scene.FvmStep*.5),
-                    support:Supports,nodalForce:Force);
+                    support:Supports,nodalForce:Force,densityKgMm3:scene.DensityKgMm3);
                 var solve=fem.Solve(maxIterations:3000);
                 Check(solve.RelativeEquilibriumResidual<1e-6,"Static FEM residual");
                 var sx=loads.Sum(q=>q.Value.X);var sy=loads.Sum(q=>q.Value.Y);var sz=loads.Sum(q=>q.Value.Z);
