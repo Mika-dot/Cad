@@ -422,6 +422,51 @@ internal static class FreeTopologyDesign
             return state;
         }
 
+        // Mandatory manufacturing sanity check: mechanics of a binary
+        // solid/void reconstruction (no SIMP grey interpolation). Use the
+        // SAME actual 5M field whose zero-isosurface is exported to STL.
+        // A successful continuous-density solve is NOT enough by itself.
+        (double Volume,double Stress,double Displacement,double Compliance) BinaryCheck(State state)
+        {
+            var shape=state.M;
+            double volume=0,stress=0,displacement=0,compliance=0;
+            foreach(var (name,loads) in scene.LoadCases)
+            {
+                (double X,double Y,double Z) Load(double x,double y,double z)
+                {
+                    var p=new Point3(x,y,z);var f=new Point3(0,0,0);
+                    foreach(var (id,v) in loads)
+                    {
+                        var b=scene.Bodies.First(q=>q.Id==id);
+                        if(b.Shape.F(p)>=0)f+=v*(1.0/counts[id]);
+                    }
+                    return (f.X,f.Y,f.Z);
+                }
+                var fem=new HexFem(nx,ny,nz,origin.X,origin.Y,origin.Z,hx,hy,hz,
+                    scene.Young,scene.Poisson,
+                    (x,y,z)=>shape.Approximate(new[]{x,y,z})>=0?
+                        state.Field.Eps*1.01:-state.Field.Eps*1.01,
+                    model:null,loadN:0,interfaceHalfWidth:0,emin:1e-4,
+                    epsF:state.Field.Eps,support:Fixed,nodalForce:Load,
+                    densityKgMm3:scene.DensityKgMm3,simpPower:1);
+                var r=fem.Solve(maxIterations:3000);
+                Check(r.RelativeEquilibriumResidual<1e-6,
+                    "Binary FEM numerical residual: "+name);
+                if(volume==0)volume=r.VolumeMm3;
+                stress=Math.Max(stress,r.MaxVonMisesMpa);
+                displacement=Math.Max(displacement,r.MaxDisplacementMm);
+                compliance+=r.ComplianceNmm/scene.LoadCases.Count;
+            }
+            return (volume,stress,displacement,compliance);
+        }
+        bool BinaryFeasible(State state,double maxAllowedCompliance)
+        {
+            var binary=BinaryCheck(state);
+            return binary.Stress<=scene.StressLimit &&
+                binary.Displacement<=scene.DisplacementLimit &&
+                binary.Compliance<=maxAllowedCompliance;
+        }
+
         var initial=Analyze(start.Controls,true,true);
         var initialDirect=Analyze(start.Controls,false,true);
         var maxCompliance=initial.Compliance*2.5;
@@ -523,6 +568,7 @@ internal static class FreeTopologyDesign
                     if(trial.Volume>current.Volume-.15||!Feasible(trial,scene,maxCompliance))continue;
                     var direct=Analyze(trialControls,false,true);
                     if(!Feasible(direct,scene,maxCompliance))continue;
+                    if(!BinaryFeasible(trial,maxCompliance))continue;
                     current=trial;accepted++;found=true;
                     Report(iteration,"OC",trial);break;
                 }
@@ -570,6 +616,7 @@ internal static class FreeTopologyDesign
                     if(trial.Volume>current.Volume-.15||!Feasible(trial,scene,maxCompliance))continue;
                     var direct=Analyze(nucleatedControls,false,true);
                     if(!Feasible(direct,scene,maxCompliance))continue;
+                    if(!BinaryFeasible(trial,maxCompliance))continue;
                     current=trial;accepted++;nucleated++;
                     Report(iteration,"new-void",trial);break;
                 }
@@ -579,6 +626,11 @@ internal static class FreeTopologyDesign
         var finalDirect=Analyze(current.Field.Controls,false,true);
         Check(Feasible(current,scene,maxCompliance)&&Feasible(finalDirect,scene,maxCompliance),
             "Final FEM/multi-physics or direct F violates constraints.");
+        var finalBinary=BinaryCheck(current);
+        Check(finalBinary.Stress<=scene.StressLimit&&
+            finalBinary.Displacement<=scene.DisplacementLimit&&
+            finalBinary.Compliance<=maxCompliance,
+            "Exported binary field violates final physical restrictions.");
         File.WriteAllLines(Path.Combine(outDir,"metrics.csv"),metrics);
         TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"optimized.stl"),current.M,null);
         using(var writer=new StreamWriter(Path.Combine(outDir,"density.csv")))
@@ -606,6 +658,10 @@ internal static class FreeTopologyDesign
             complianceNmm=current.Compliance,
             maximumVonMisesMpa=current.Stress,maximumDisplacementMm=current.Displacement,
             directFVolumeMm3=finalDirect.Volume,
+            binaryFvmVolumeMm3=finalBinary.Volume,
+            binaryMaximumVonMisesMpa=finalBinary.Stress,
+            binaryMaximumDisplacementMm=finalBinary.Displacement,
+            binaryComplianceNmm=finalBinary.Compliance,
             firstFrequencyHz=double.IsFinite(current.FirstHz)?current.FirstHz:(double?)null,
             worstImpactMm=double.IsFinite(current.ImpactMm)?current.ImpactMm:(double?)null,
             worstImpactStressMpa=double.IsFinite(current.ImpactStress)?current.ImpactStress:(double?)null,
