@@ -1,0 +1,33 @@
+name: FVM free topology focused verification
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/FreeTopologyDesign.cs'
+      - 'experiments/FvmGenerativeDemo/HexFem.cs'
+      - 'experiments/FvmGenerativeDemo/TwoSphereDesign.cs'
+      - 'experiments/FvmGenerativeDemo/free_topology_3_bodies.json'
+      - 'experiments/FvmGenerativeDemo/validate_stl.py'
+      - '.github/workflows/fvm-free-topology-ci.yml'
+  workflow_dispatch:
+jobs:
+  free-topology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Strict compile including all FVM free-design code
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Execute FEM verified free 5M topology and gradient test
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_3_bodies.json --iterations 3 --gradient-check --self-test --out output/free
+      - name: Assert printable connected and reduced STL volume
+        run: python experiments/FvmGenerativeDemo/validate_stl.py output/free/initial.stl output/free/optimized.stl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: free-topology-fvm-verification
+          path: output/free
+          if-no-files-found: warn
