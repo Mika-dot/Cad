@@ -1,0 +1,112 @@
+{
+  "bounds": {
+    "min": [
+      -14,
+      -25,
+      -22
+    ],
+    "max": [
+      78,
+      44,
+      22
+    ]
+  },
+  "routingStepMm": 4,
+  "fvmStepMm": 3,
+  "bridgeRadiusMm": 4,
+  "femCells": [
+    11,
+    10,
+    8
+  ],
+  "iterations": 1,
+  "material": {
+    "youngMpa": 200000,
+    "poisson": 0.3,
+    "densityKgM3": 7850
+  },
+  "limits": {
+    "vonMisesMpa": 800,
+    "displacementMm": 2
+  },
+  "bodies": [
+    {
+      "id": "fixed-imported-cube",
+      "role": "fixed",
+      "seed": [
+        0,
+        0,
+        0
+      ],
+      "shape": {
+        "type": "mesh",
+        "file": "input_cube_binary.stl"
+      }
+    },
+    {
+      "id": "required-load",
+      "role": "load",
+      "seed": [
+        58,
+        0,
+        0
+      ],
+      "shape": {
+        "type": "sphere",
+        "center": [
+          58,
+          0,
+          0
+        ],
+        "radius": 9
+      },
+      "forceN": [
+        160,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "required-ellipsoid",
+      "role": "anchor",
+      "seed": [
+        57,
+        24,
+        0
+      ],
+      "shape": {
+        "type": "ellipsoid",
+        "center": [
+          57,
+          24,
+          0
+        ],
+        "radii": [
+          7,
+          8,
+          7
+        ]
+      }
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "avoid-rotating-shaft",
+      "shape": {
+        "type": "cylinder",
+        "a": [
+          29,
+          0,
+          -18
+        ],
+        "b": [
+          29,
+          0,
+          18
+        ],
+        "radius": 9
+      },
+      "clearanceMm": 2
+    }
+  ]
+}
