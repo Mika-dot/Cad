@@ -163,6 +163,9 @@ internal sealed class FreeTopologyField
         f=Math.Min(f,Boundary(p));
         foreach(var o in Scene.Obstacles)
             f=Math.Min(f,-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm-0.20*Scene.FvmStep);
+        // Keep loaded STL faces physically exposed. The removed region is
+        // an exterior contact-access passage, NOT removable protected body.
+        f=Math.Min(f,Scene.PressureContactVoid(p,Scene.FvmStep*.35));
         return f;
     }
     private bool DesignIsActive(Point3 p)
@@ -171,6 +174,7 @@ internal sealed class FreeTopologyField
         if(BaseMaterial(p)>=top||Boundary(p)<=top)return false;
         foreach(var o in Scene.Obstacles)
             if(-o.Shape.F(p)-o.Clearance-Scene.AvoidSafetyMm-0.20*Scene.FvmStep<=top)return false;
+        if(Scene.PressureContactVoid(p,Scene.FvmStep*.35)<=top)return false;
         return true;
     }
     internal FunctionalVoxelModel Sample()
