@@ -20,6 +20,8 @@ internal static class Program
         {
             if(args.Contains("--multiphysics-self-test",StringComparer.OrdinalIgnoreCase))
                 return MultiphysicsSelfTest.Run();
+            if(args.Contains("--free-topology",StringComparer.OrdinalIgnoreCase))
+                return FreeTopologyDesign.Run(args);
             if(args.Contains("--multi-scene",StringComparer.OrdinalIgnoreCase))
                 return UniversalDesign.Run(args);
             if(args.Contains("--two-spheres",StringComparer.OrdinalIgnoreCase))
