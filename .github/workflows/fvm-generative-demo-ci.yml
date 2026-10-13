@@ -49,6 +49,12 @@ jobs:
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_forced_detour.json --iterations 1 --out experiments/FvmGenerativeDemo/output/forced-detour
       - name: Check watertight, connected detour STL
         run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/forced-detour/initial.stl experiments/FvmGenerativeDemo/output/forced-detour/optimized.stl
+      - name: Generate binary STL input mesh from closed ASCII source
+        run: python experiments/FvmGenerativeDemo/make_input_binary_stl.py experiments/FvmGenerativeDemo/input_cube_ascii.stl experiments/FvmGenerativeDemo/input_cube_binary.stl
+      - name: Optimize arbitrary input STL, additional anchors and a keepout
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_imported_stl.json --iterations 1 --out experiments/FvmGenerativeDemo/output/input-stl
+      - name: Validate optimized CAD STL import result
+        run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/input-stl/initial.stl experiments/FvmGenerativeDemo/output/input-stl/optimized.stl
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
