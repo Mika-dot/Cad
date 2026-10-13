@@ -20,10 +20,11 @@ internal sealed partial class HexFem
     private readonly FunctionalVoxelModel? _model;
     private readonly double _epsF;
     private readonly double _emin;
+    private readonly double _densityKgMm3;
     private readonly int _nx, _ny, _nz;
     private readonly double _x0, _y0, _z0, _hx, _hy, _hz;
     internal double Volume { get; private set; }
-    internal double MassKg => Volume * 7.85e-6; // steel density kg/mm³
+    internal double MassKg => Volume * _densityKgMm3;
     internal int Dofs => _rhs.Length;
     internal int Elements => _elements.Count;
 
@@ -40,14 +41,17 @@ internal sealed partial class HexFem
         Func<double,double,double,double> field, FunctionalVoxelModel? model,
         double loadN, double interfaceHalfWidth, double emin = 1e-5, double epsF = 30,
         Func<double,double,double,bool>? support = null,
-        Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null)
+        Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null,
+        double densityKgMm3=7.85e-6)
     {
         if (nx < 1 || ny < 1 || nz < 1 || hx <= 0 || hy <= 0 || hz <= 0 ||
-            young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1)
+            young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1 ||
+             densityKgMm3<=0 || !double.IsFinite(densityKgMm3))
             throw new ArgumentException("Invalid finite-element mesh or elasticity.");
         _nx=nx; _ny=ny; _nz=nz;
         _x0=x0; _y0=y0; _z0=z0; _hx=hx; _hy=hy; _hz=hz;
         _field=field; _model=model; _emin=emin; _epsF=epsF;
+        _densityKgMm3=densityKgMm3;
         var nodeCount=(nx+1)*(ny+1)*(nz+1);
         _rhs=new double[nodeCount*3]; _diag=new double[nodeCount*3];
         _fixed=new bool[nodeCount*3];
