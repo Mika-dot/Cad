@@ -136,6 +136,7 @@ internal sealed class FreeTopologyField
         return beta*(1-t*t)/(2*Math.Tanh(beta*.5));
     }
     private double Density(Point3 p)=>Project(FilteredDensity(p));
+    internal double ProjectedAtCentre(int id)=>Project(Filtered[id]);
     private double BaseMaterial(Point3 p)
     {
         var value=double.NegativeInfinity;
@@ -821,7 +822,7 @@ internal static class FreeTopologyDesign
             current.M,null,pruneTinyShellFraction:1e-4);
         using(var writer=new StreamWriter(Path.Combine(outDir,"density.csv")))
         {
-            writer.WriteLine("cell,x_mm,y_mm,z_mm,raw_density,filtered_density,locked");
+            writer.WriteLine("cell,x_mm,y_mm,z_mm,raw_density,filtered_density,projected_density,locked");
             for(int i=0;i<current.Field.Variables;i++)
             {
                 var c=current.Field.Grid.Centre(i);
@@ -832,6 +833,7 @@ internal static class FreeTopologyDesign
                     c[2].ToString("G17",CultureInfo.InvariantCulture),
                     current.Field.Controls[i].ToString("G17",CultureInfo.InvariantCulture),
                     current.Field.Filtered[i].ToString("G17",CultureInfo.InvariantCulture),
+                    current.Field.ProjectedAtCentre(i).ToString("G17",CultureInfo.InvariantCulture),
                     current.Field.Locked[i].ToString()}));
             }
         }
