@@ -752,70 +752,102 @@ internal static class FreeTopologyDesign
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "BINARY FEM PASS: V={0:F2} mm3, VM={1:F3} MPa, u={2:F6} mm, C={3:F5} Nmm (actual 5M material/void classification)",
             finalBinary.Volume,finalBinary.Stress,finalBinary.Displacement,finalBinary.Compliance));
-        // Optional independent mesh-refinement diagnostic on the exact same
-        // reconstructed binary topology. Refining only the background Hex8
-        // exposes discretization error, which a small PCG residual cannot.
+        // Three nested Hex8 levels for the same printed five-M sign geometry.
+        // Solves on a new FEM grid reveal discretization drift and potentially
+        // missed stress peaks. They are diagnostics, NOT certification.
         (double Volume,double Stress,double Displacement)? refined=null;
+        bool? meshConverged=null;
         if(args.Contains("--refinement-report"))
         {
-            int rx=Math.Min(25,(int)Math.Ceiling(nx*1.5));
-            int ry=Math.Min(25,(int)Math.Ceiling(ny*1.5));
-            int rz=Math.Min(25,(int)Math.Ceiling(nz*1.5));
-            double dx=size.X/rx,dy=size.Y/ry,dz=size.Z/rz;
-            var refinedNodes=new List<Point3>();
-            for(int i=0;i<=rx;i++)for(int j=0;j<=ry;j++)for(int k=0;k<=rz;k++)
-                refinedNodes.Add(new Point3(origin.X+i*dx,origin.Y+j*dy,origin.Z+k*dz));
-            var countRefined=scene.Bodies.ToDictionary(b=>b.Id,
-                b=>refinedNodes.Count(p=>b.Shape.F(p)>=0));
-            Check(countRefined.Values.All(v=>v>=2),
-                "Refined FEM lost required geometric fixture nodes.");
-            double v=0,vm=0,u=0;int loadCaseIndex=0;
-            foreach(var (_,loads) in scene.LoadCases)
+            var levels=new List<(int[] Cells,double Volume,double Stress,double Displacement)>
             {
-                (double X,double Y,double Z) ForceRefined(double x,double y,double z)
+                (new[]{nx,ny,nz},finalBinary.Volume,finalBinary.Stress,
+                    finalBinary.Displacement)
+            };
+            foreach(var multiplier in new[]{1.5,2.0})
+            {
+                int rx=Math.Min(25,(int)Math.Ceiling(nx*multiplier));
+                int ry=Math.Min(25,(int)Math.Ceiling(ny*multiplier));
+                int rz=Math.Min(25,(int)Math.Ceiling(nz*multiplier));
+                var prev=levels[^1].Cells;
+                if(rx==prev[0]&&ry==prev[1]&&rz==prev[2])continue;
+                double dx=size.X/rx,dy=size.Y/ry,dz=size.Z/rz;
+                var refinedNodes=new List<Point3>();
+                for(int i=0;i<=rx;i++)for(int j=0;j<=ry;j++)for(int k=0;k<=rz;k++)
+                    refinedNodes.Add(new Point3(origin.X+i*dx,
+                        origin.Y+j*dy,origin.Z+k*dz));
+                var countsOnGrid=scene.Bodies.ToDictionary(b=>b.Id,
+                    b=>refinedNodes.Count(p=>b.Shape.F(p)>=0));
+                Check(countsOnGrid.Values.All(v=>v>=2),
+                    "Refined FEM lost required geometric fixture nodes.");
+                double v=0,vm=0,u=0;int loadCaseIndex=0;
+                foreach(var (_,loads) in scene.LoadCases)
                 {
-                    var p=new Point3(x,y,z);var net=new Point3(0,0,0);
-                    foreach(var (id,force) in loads)
+                    (double X,double Y,double Z) ForceRefined(double x,double y,double z)
                     {
-                        var body=scene.Bodies.First(b=>b.Id==id);
-                        if(body.Shape.F(p)>=0)net+=force*(1.0/countRefined[id]);
+                        var p=new Point3(x,y,z);var net=new Point3(0,0,0);
+                        foreach(var (id,force) in loads)
+                        {
+                            var body=scene.Bodies.First(b=>b.Id==id);
+                            if(body.Shape.F(p)>=0)net+=force*(1.0/countsOnGrid[id]);
+                        }
+                        return(net.X,net.Y,net.Z);
                     }
-                    return(net.X,net.Y,net.Z);
+                    var extraFem=new HexFem(rx,ry,rz,origin.X,origin.Y,origin.Z,
+                        dx,dy,dz,scene.Young,scene.Poisson,
+                        (x,y,z)=>current.M.Approximate(new[]{x,y,z})>=0
+                            ?current.Field.Eps*1.01:-current.Field.Eps*1.01,
+                        model:null,loadN:0,interfaceHalfWidth:0,emin:1e-4,
+                        epsF:current.Field.Eps,support:Fixed,nodalForce:ForceRefined,
+                        densityKgMm3:scene.DensityKgMm3,simpPower:1);
+                    var answer=extraFem.Solve(maxIterations:5000);
+                    Check(answer.RelativeEquilibriumResidual<1e-6,
+                        "Refined binary FEM solver residual");
+                    if(loadCaseIndex++==0)v=answer.VolumeMm3;
+                    vm=Math.Max(vm,answer.MaxVonMisesMpa);
+                    u=Math.Max(u,answer.MaxDisplacementMm);
                 }
-                var extraFem=new HexFem(rx,ry,rz,origin.X,origin.Y,origin.Z,
-                    dx,dy,dz,scene.Young,scene.Poisson,
-                    (x,y,z)=>current.M.Approximate(new[]{x,y,z})>=0
-                        ?current.Field.Eps*1.01:-current.Field.Eps*1.01,
-                    model:null,loadN:0,interfaceHalfWidth:0,emin:1e-4,
-                    epsF:current.Field.Eps,support:Fixed,nodalForce:ForceRefined,
-                    densityKgMm3:scene.DensityKgMm3,simpPower:1);
-                var answer=extraFem.Solve(maxIterations:4000);
-                Check(answer.RelativeEquilibriumResidual<1e-6,
-                    "Refined binary FEM solver residual");
-                if(loadCaseIndex++==0)v=answer.VolumeMm3;
-                vm=Math.Max(vm,answer.MaxVonMisesMpa);
-                u=Math.Max(u,answer.MaxDisplacementMm);
+                var previous=levels[^1];
+                var relativeV=100*(v/Math.Max(previous.Volume,1e-12)-1);
+                var relativeVM=100*(vm/Math.Max(previous.Stress,1e-12)-1);
+                var relativeU=100*(u/Math.Max(previous.Displacement,1e-12)-1);
+                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                    "MESH REFINEMENT DIAGNOSTIC: {0}x{1}x{2} -> {3}x{4}x{5}; binary V change={6:F2}%, VM change={7:F2}%, u change={8:F2}%. NOT a proof of convergence.",
+                    previous.Cells[0],previous.Cells[1],previous.Cells[2],
+                    rx,ry,rz,relativeV,relativeVM,relativeU));
+                levels.Add((new[]{rx,ry,rz},v,vm,u));
+                refined=(v,vm,u);
+                // The refined shape uses the SAME M geometry and physical
+                // loads, but catches stress/displacement constraint violations
+                // that the original coarse-grid solve could overlook.
+                Check(vm<=scene.StressLimit&&u<=scene.DisplacementLimit,
+                    "More detailed binary Hex8 violates user-specified strength or deflection limits.");
             }
-            refined=(v,vm,u);
-            var relativeV=100*(v/finalBinary.Volume-1);
-            var relativeVM=100*(vm/Math.Max(1e-12,finalBinary.Stress)-1);
-            var relativeU=100*(u/Math.Max(1e-12,finalBinary.Displacement)-1);
-            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "MESH REFINEMENT DIAGNOSTIC: {0}x{1}x{2} -> {3}x{4}x{5}; binary V change={6:F2}%, VM change={7:F2}%, u change={8:F2}%. NOT a proof of convergence.",
-                nx,ny,nz,rx,ry,rz,relativeV,relativeVM,relativeU));
-            var info=new{
-                coarseCells=new[]{nx,ny,nz},refinedCells=new[]{rx,ry,rz},
-                coarseBinaryVolumeMm3=finalBinary.Volume,
-                refinedBinaryVolumeMm3=v,
-                coarseVonMisesMpa=finalBinary.Stress,refinedVonMisesMpa=vm,
-                coarseDisplacementMm=finalBinary.Displacement,refinedDisplacementMm=u,
-                relativeVolumeChangePercent=relativeV,
-                relativeStressChangePercent=relativeVM,
-                relativeDisplacementChangePercent=relativeU,
-                caveat="Two levels only; stress singularities and sub-grid geometry remain unresolved"
+            var coarse=levels[0];
+            var last=levels[^1];
+            var previousLevel=levels.Count>1?levels[^2]:coarse;
+            var stressChange=100*(last.Stress/Math.Max(1e-12,previousLevel.Stress)-1);
+            var displacementChange=100*(last.Displacement/
+                Math.Max(1e-12,previousLevel.Displacement)-1);
+            var volumeChange=100*(last.Volume/Math.Max(1e-12,previousLevel.Volume)-1);
+            meshConverged=levels.Count>=3 && Math.Abs(stressChange)<10 &&
+                Math.Abs(displacementChange)<10 && Math.Abs(volumeChange)<5;
+            Console.WriteLine($"MESH CONVERGENCE SCREEN: " +
+                (meshConverged.Value?"PASS indicative tolerance on last refinement":"NOT CONVERGED, further FEM refinement required"));
+            var report=new{
+                entries=levels.Select(l=>new{
+                    cells=l.Cells,volumeMm3=l.Volume,
+                    maxVonMisesMpa=l.Stress,maxDisplacementMm=l.Displacement
+                }).ToArray(),
+                convergenceScreenPassed=meshConverged,
+                lastRefinementRelativeVolumePercent=volumeChange,
+                lastRefinementRelativeStressPercent=stressChange,
+                lastRefinementRelativeDisplacementPercent=displacementChange,
+                caveat="Only three grids, geometry/H_epsilon/BC still approximate; pass is not a certified error bound"
             };
             File.WriteAllText(Path.Combine(outDir,"mesh_refinement.json"),
-                JsonSerializer.Serialize(info,new JsonSerializerOptions{WriteIndented=true}));
+                JsonSerializer.Serialize(report,
+                    new JsonSerializerOptions{WriteIndented=true}));
         }
         File.WriteAllLines(Path.Combine(outDir,"metrics.csv"),metrics);
         TwoSphereDesign.SphereOutputs.WriteStl(Path.Combine(outDir,"optimized.stl"),
@@ -854,6 +886,7 @@ internal static class FreeTopologyDesign
             refinedBinaryVolumeMm3=refined?.Volume,
             refinedBinaryVonMisesMpa=refined?.Stress,
             refinedBinaryDisplacementMm=refined?.Displacement,
+            meshConvergenceScreenPassed=meshConverged,
             binaryMultiphysicsFeasible=finalBinary.AdditionalPass,
             firstFrequencyHz=double.IsFinite(current.FirstHz)?current.FirstHz:(double?)null,
             worstImpactMm=double.IsFinite(current.ImpactMm)?current.ImpactMm:(double?)null,
