@@ -8,6 +8,7 @@ internal sealed record PulseResult(double MaxDisplacementMm,double MaxAccelerati
     double MaxVonMisesMpa,double TimeStepSeconds,int Steps);
 internal sealed record ThermalResult(double ConductanceWPerK,double RelativeResidual,
     double[] Temperatures);
+internal sealed record ThermoElasticResult(double MaxVonMisesMpa,double MaxDisplacementMm,double RelativeResidual);
 
 internal sealed partial class HexFem
 {
@@ -266,4 +267,104 @@ internal sealed partial class HexFem
             throw new ArithmeticException("Nonpositive thermal conductance.");
         return new ThermalResult(flux,Math.Sqrt(residual)/Math.Max(1e-12,Math.Sqrt(scale)),temp);
     }
+
+    // First-mode forced harmonic approximation, not a full multimodal frequency response.
+    internal double HarmonicFirstModeMaxDisplacement(double densityKgMm3,double forceFrequencyHz,
+        double dampingRatio)
+    {
+        if(forceFrequencyHz<0||dampingRatio<=0||dampingRatio>1)
+            throw new ArgumentException("Harmonic frequency/damping invalid.");
+        var first=FirstNaturalFrequency(densityKgMm3);
+        var wn=2*Math.PI*first.FrequencyHz;
+        var w=2*Math.PI*forceFrequencyHz;
+        var modalLoad=Dot(first.Mode,_rhs);
+        var q=Math.Abs(modalLoad)/Math.Sqrt(
+            Math.Pow(wn*wn-w*w,2)+Math.Pow(2*dampingRatio*wn*w,2));
+        var max=0.0;
+        for(int i=0;i<Dofs;i+=3)
+            max=Math.Max(max,q*Math.Sqrt(
+                first.Mode[i]*first.Mode[i]+first.Mode[i+1]*first.Mode[i+1]
+                +first.Mode[i+2]*first.Mode[i+2]));
+        return max;
+    }
+
+    // Sequential thermo-elastic solve: imported steady temperature field
+    // T=coldK+(hotK-coldK)*normalizedT. Mechanical stiffness currently uses
+    // constant E,nu and small-strain alpha*(T-reference) volumetric eigenstrain.
+    internal ThermoElasticResult SolveThermoElastic(ThermalResult thermal,
+        double expansionPerK,double coldK,double hotK,double referenceK)
+    {
+        var t=thermal.Temperatures;
+        if(t.Length!=(_nx+1)*(_ny+1)*(_nz+1)||expansionPerK<0)
+            throw new ArgumentException("Thermal temperature/mat parameters invalid.");
+        var force=(double[])_rhs.Clone();
+        var b=new double[6,24];var det=_hx*_hy*_hz/8;
+        var count=0;
+        foreach(var e in _elements)
+        {
+            var q=0;
+            foreach(var xi in Gauss)foreach(var eta in Gauss)foreach(var zeta in Gauss)
+            {
+                Shape(xi,eta,zeta,b);
+                var normalized=0.0;
+                for(int a=0;a<8;a++)
+                {
+                    var (i,j,k)=Corners[a];
+                    var shape=(1+(2*i-1)*xi)*(1+(2*j-1)*eta)*(1+(2*k-1)*zeta)/8;
+                    normalized+=shape*t[e.Id[3*a]/3];
+                }
+                var actualT=coldK+(hotK-coldK)*normalized;
+                var th=expansionPerK*(actualT-referenceK);
+                var h=_emin+(1-_emin)*e.FractionAtGauss[q++];
+                // D*[th,th,th,0,0,0] = (3λ+2μ)*th.
+                var thermalStress=(_elastic[0,0]+_elastic[0,1]+_elastic[0,2])*th;
+                for(int a=0;a<24;a++)
+                    force[e.Id[a]]+=det*h*thermalStress*(b[0,a]+b[1,a]+b[2,a]);
+            }
+            count++;
+        }
+        var u=SolveLinear(force,new double[Dofs],0,maxIterations:3000);
+        var ku=new double[Dofs];Multiply(u,ku,false);
+        var residual=0.0;var forceNorm=0.0;
+        for(int i=0;i<Dofs;i++)if(!_fixed[i])
+        {
+            residual+=Math.Pow(ku[i]-force[i],2);
+            forceNorm+=force[i]*force[i];
+        }
+        var maxU=0.0;
+        for(int i=0;i<Dofs;i+=3)
+            maxU=Math.Max(maxU,Math.Sqrt(u[i]*u[i]+u[i+1]*u[i+1]+u[i+2]*u[i+2]));
+        var maxVM=0.0;
+        foreach(var e in _elements)
+        {
+            var q=0;
+            foreach(var xi in Gauss)foreach(var eta in Gauss)foreach(var zeta in Gauss)
+            {
+                if(e.FractionAtGauss[q]<.5){q++;continue;}
+                Shape(xi,eta,zeta,b);
+                double temp=0;
+                for(int a=0;a<8;a++)
+                {
+                    var (i,j,k)=Corners[a];
+                    var shape=(1+(2*i-1)*xi)*(1+(2*j-1)*eta)*(1+(2*k-1)*zeta)/8;
+                    temp+=shape*t[e.Id[3*a]/3];
+                }
+                q++;
+                var th=expansionPerK*(coldK+(hotK-coldK)*temp-referenceK);
+                var strain=new double[6];var stress=new double[6];
+                for(int a=0;a<6;a++)for(int c=0;c<24;c++)
+                    strain[a]+=b[a,c]*u[e.Id[c]];
+                for(int a=0;a<3;a++)strain[a]-=th;
+                for(int a=0;a<6;a++)for(int c=0;c<6;c++)
+                    stress[a]+=_elastic[a,c]*strain[c];
+                var sx=stress[0];var sy=stress[1];var sz=stress[2];
+                var vm=Math.Sqrt(.5*((sx-sy)*(sx-sy)+(sy-sz)*(sy-sz)+(sz-sx)*(sz-sx))
+                    +3*(stress[3]*stress[3]+stress[4]*stress[4]+stress[5]*stress[5]));
+                maxVM=Math.Max(maxVM,vm);
+            }
+        }
+        return new ThermoElasticResult(maxVM,maxU,
+            Math.Sqrt(residual)/Math.Max(1e-12,Math.Sqrt(forceNorm)));
+    }
+
 }
