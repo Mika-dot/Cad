@@ -24,6 +24,7 @@ internal sealed class ImplicitMesh : ImplicitSolid
     }
     private readonly Node _root;
     private readonly int _faces;
+    internal Point3 BoundingCentre=>(_root.Lo+_root.Hi)*.5;
 
     private ImplicitMesh(List<Triangle> triangles)
     {
