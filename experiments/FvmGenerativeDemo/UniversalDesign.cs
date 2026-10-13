@@ -156,13 +156,17 @@ internal static class UniversalDesign
                     (x,y,z)=>field.Value(new Point3(x,y,z)),useM?model:null,
                     loadN:0,interfaceHalfWidth:0,emin:1e-4,
                     epsF:Math.Max(0.75,scene.FvmStep*.5),
-                    support:Supports,nodalForce:Force,densityKgMm3:scene.DensityKgMm3);
+                    support:Supports,nodalForce:Force,densityKgMm3:scene.DensityKgMm3,
+                    trianglePressures:scene.PressureFor(name));
                 var solve=fem.Solve(maxIterations:3000);
                 Check(solve.RelativeEquilibriumResidual<1e-6,"Static FEM residual");
-                var sx=loads.Sum(q=>q.Value.X);var sy=loads.Sum(q=>q.Value.Y);var sz=loads.Sum(q=>q.Value.Z);
-                Check(Math.Abs(solve.ReactionXN+sx)<Math.Max(.1,Math.Abs(sx)*.001),"X balance");
-                Check(Math.Abs(solve.ReactionYN+sy)<Math.Max(.1,Math.Abs(sy)*.001),"Y balance");
-                Check(Math.Abs(solve.ReactionZN+sz)<Math.Max(.1,Math.Abs(sz)*.001),"Z balance");
+                var applied=scene.AppliedForce(name,loads);
+                Check(Math.Abs(solve.ReactionXN+applied.X)<
+                    Math.Max(.1,Math.Abs(applied.X)*.001),"X pressure/nodal force balance");
+                Check(Math.Abs(solve.ReactionYN+applied.Y)<
+                    Math.Max(.1,Math.Abs(applied.Y)*.001),"Y pressure/nodal force balance");
+                Check(Math.Abs(solve.ReactionZN+applied.Z)<
+                    Math.Max(.1,Math.Abs(applied.Z)*.001),"Z pressure/nodal force balance");
                 cases.Add(new ScenarioMechanics(name,fem,solve));
             }
             var state=new State{Field=field,Model=model,UseM=useM,Cases=cases};
