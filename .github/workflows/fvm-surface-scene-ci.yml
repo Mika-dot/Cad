@@ -1,0 +1,43 @@
+name: FVM CSG scene pressure from exposed STL faces
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/UniversalScene.cs'
+      - 'experiments/FvmGenerativeDemo/UniversalDesign.cs'
+      - 'experiments/FvmGenerativeDemo/SurfacePatchStl.cs'
+      - 'experiments/FvmGenerativeDemo/HexFem.cs'
+      - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
+      - 'experiments/FvmGenerativeDemo/pressure_load_box_end.stl'
+      - '.github/workflows/fvm-surface-scene-ci.yml'
+  workflow_dispatch:
+jobs:
+  surface-pressure-scene:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile CSG surface force solver as warnings-as-errors
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Validate exposed surface STL face and applied pressure
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --validate-scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json
+      - name: Optimize connector with real STL pressure instead of lumped nodal forces
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --iterations 1 --self-test --out output/pressure-scene
+      - name: Independently check volume, connected STL and keepout
+        run: |
+          python experiments/FvmGenerativeDemo/validate_stl.py output/pressure-scene/initial.stl output/pressure-scene/optimized.stl
+          python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json output/pressure-scene/routes.csv output/pressure-scene/initial.stl output/pressure-scene/optimized.stl
+          python -c "import json; s=json.load(open('output/pressure-scene/summary.json')); assert s['status']=='PASS' and s['savedVolumePercent']>0 and s['loadCases']==1; print('PASS optimization with STL pressure surface only')"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: surface-pressure-multi-body-results-${{ matrix.os }}
+          path: output/pressure-scene
+          if-no-files-found: warn
