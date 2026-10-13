@@ -4,6 +4,8 @@ on:
     branches: [feature/fvm-generative-mechanics]
     paths:
       - 'experiments/FvmGenerativeDemo/FreeTopologyDesign.cs'
+      - 'experiments/FvmGenerativeDemo/HexFemMultiphysics.cs'
+      - 'experiments/FvmGenerativeDemo/MultiphysicsSelfTest.cs'
       - 'experiments/FvmGenerativeDemo/free_topology_multiphysics.json'
       - '.github/workflows/fvm-free-multiphysics-ci.yml'
   workflow_dispatch:
