@@ -65,6 +65,27 @@ internal static class MultiphysicsSelfTest
             forceFrequencyHz:0,dampingRatio:.03);
         Check(harmonic>offResonance*10,"Resonance magnifies transverse response");
 
+        // Engineering eigenfrequency must converge with mesh resolution;
+        // a tiny eigen-residual alone does NOT prove a correct physical mode.
+        // Classical slender cantilever beam Euler-Bernoulli reference:
+        // f1 = beta1^2/(2*pi*L^2)*sqrt(E*I/(rho*A)).
+        var finer=new HexFem(16,2,2,0,0,0,length/16,5,5,
+            e,0,(_x,_y,_z)=>1,null,
+            loadN:force,interfaceHalfWidth:20,
+            emin:1e-5,epsF:.1);
+        var refinedFrequency=finer.FirstNaturalFrequency(7.85e-6,18);
+        var inertia=10*Math.Pow(10,3)/12;
+        var rhoInertial=7.85e-6/1000;
+        var beamExpected=(1.87510406871*1.87510406871)/
+            (2*Math.PI*length*length)*
+            Math.Sqrt(e*inertia/(rhoInertial*area));
+        var beamError=Math.Abs(refinedFrequency.FrequencyHz/beamExpected-1);
+        Console.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "MODAL REFINEMENT: coarse={0:F2} Hz, finer={1:F2} Hz, Euler={2:F2} Hz, error={3:P2}",
+            mode.FrequencyHz,refinedFrequency.FrequencyHz,beamExpected,beamError));
+        Check(refinedFrequency.RelativeResidual<.08,"Refined modal eigenvalue residual");
+        Check(beamError<.30,"Refined 3D bending frequency vs slender Euler beam");
+
         var pulse=fem.SolvePulse(7.85e-6,pulseSeconds:.002,multiplier:2,
             dampingRatio:.03,stepsPerPulse:12);
         Check(pulse.MaxDisplacementMm>0&&pulse.MaxAccelerationMmS2>0&&
