@@ -44,17 +44,26 @@ internal static class MultiphysicsSelfTest
             "Nonzero thermal expansion solution");
         Check(nonzero.RelativeResidual<1e-6,"Nonzero thermal eigenstrain equilibrium");
 
-        var mode=fem.FirstNaturalFrequency(7.85e-6,12);
+        // Use transverse bending force to excite the FIRST bending mode.
+        // An axial force would almost orthogonally miss that mode, yielding
+        // a numerically nonzero but physically uninformative response.
+        var transverse=new HexFem(4,1,1,0,0,0,25,10,10,
+            e,0,(_x,_y,_z)=>1,null,
+            loadN:0,interfaceHalfWidth:0,emin:1e-5,epsF:.1,
+            nodalForce:(x,y,z)=>x>=length-1e-8
+                ?(0.0,force/4,0.0):(0.0,0.0,0.0));
+        var mode=transverse.FirstNaturalFrequency(7.85e-6,12);
         Check(mode.FrequencyHz>1&&double.IsFinite(mode.FrequencyHz),
             "Generalized mass and stiffness eigenfrequency");
         Check(mode.RelativeResidual<.3,"First-mode approximate eigen-residual");
 
-        var harmonic=fem.HarmonicFirstModeMaxDisplacement(7.85e-6,
+        var harmonic=transverse.HarmonicFirstModeMaxDisplacement(7.85e-6,
             forceFrequencyHz:mode.FrequencyHz,dampingRatio:.03);
-        Check(harmonic>0&&double.IsFinite(harmonic),"Nonzero resonant harmonic response");
-        var offResonance=fem.HarmonicFirstModeMaxDisplacement(7.85e-6,
+        Check(harmonic>1e-5&&double.IsFinite(harmonic),
+            "Bending-mode harmonic response must be measurable");
+        var offResonance=transverse.HarmonicFirstModeMaxDisplacement(7.85e-6,
             forceFrequencyHz:0,dampingRatio:.03);
-        Check(harmonic>offResonance*2,"Resonance magnifies response");
+        Check(harmonic>offResonance*10,"Resonance magnifies transverse response");
 
         var pulse=fem.SolvePulse(7.85e-6,pulseSeconds:.002,multiplier:2,
             dampingRatio:.03,stepsPerPulse:12);
