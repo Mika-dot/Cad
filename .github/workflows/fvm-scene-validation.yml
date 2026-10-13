@@ -1,0 +1,31 @@
+name: FVM scene contract validation
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/Program.cs'
+      - 'experiments/FvmGenerativeDemo/UniversalScene.cs'
+      - 'experiments/FvmGenerativeDemo/multi_scene_6_bodies.json'
+      - 'experiments/FvmGenerativeDemo/free_topology_6_bodies.json'
+      - 'experiments/FvmGenerativeDemo/multi_scene_auto_truss.json'
+      - 'experiments/FvmGenerativeDemo/test_invalid_scenes.py'
+      - '.github/workflows/fvm-scene-validation.yml'
+  workflow_dispatch:
+jobs:
+  scene-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Strict compile
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Accept correct six-body geometry without FEM
+        run: |
+          dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --validate-scene experiments/FvmGenerativeDemo/multi_scene_6_bodies.json
+          dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --validate-scene experiments/FvmGenerativeDemo/free_topology_6_bodies.json
+          dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --validate-scene experiments/FvmGenerativeDemo/multi_scene_auto_truss.json
+      - name: Require explicit rejection of physically contradictory scenes
+        run: python experiments/FvmGenerativeDemo/test_invalid_scenes.py experiments/FvmGenerativeDemo/bin/Release/net8.0/FvmGenerativeDemo.dll
