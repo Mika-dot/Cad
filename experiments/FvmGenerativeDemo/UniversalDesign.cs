@@ -23,6 +23,10 @@ internal static class UniversalDesign
         internal double ImpactDisplacementMm = double.NaN;
         internal double ImpactStressMpa = double.NaN;
         internal double ThermalConductanceWPerK = double.NaN;
+        internal double ThermoElasticStressMpa = double.NaN;
+        internal double ThermoElasticDisplacementMm = double.NaN;
+        internal double HarmonicDisplacementMm = double.NaN;
+        internal double FatigueDamage = double.NaN;
     }
     private static string Arg(string[] a,string key,string fallback)
     {
@@ -143,8 +147,11 @@ internal static class UniversalDesign
             if(extras)
             {
                 var fem=cases[0].Solver;
-                if(scene.MinFrequencyHz>0)
+                if(scene.MinFrequencyHz>0||scene.HarmonicFrequencyHz>=0)
                     state.FrequencyHz=fem.FirstNaturalFrequency(scene.DensityKgMm3).FrequencyHz;
+                if(scene.HarmonicFrequencyHz>=0)
+                    state.HarmonicDisplacementMm=fem.HarmonicFirstModeMaxDisplacement(
+                        scene.DensityKgMm3,scene.HarmonicFrequencyHz,scene.DampingRatio);
                 if(double.IsFinite(scene.MaxImpactDisplacementMm))
                 {
                     var impact=fem.SolvePulse(scene.DensityKgMm3,scene.ImpactPulseSeconds,
@@ -152,14 +159,35 @@ internal static class UniversalDesign
                     state.ImpactDisplacementMm=impact.MaxDisplacementMm;
                     state.ImpactStressMpa=impact.MaxVonMisesMpa;
                 }
-                if(scene.MinThermalConductanceWPerK>0)
+                if(scene.MinThermalConductanceWPerK>0||scene.ThermalExpansionPerK>0)
                 {
                     var hot=scene.Bodies.First(b=>b.Id==scene.ThermalHotId);
                     var cold=scene.Bodies.First(b=>b.Id==scene.ThermalColdId);
-                    state.ThermalConductanceWPerK=fem.ThermalConductance(
+                    var fieldT=fem.ThermalConductance(
                         scene.ThermalConductivityWmK,
                         (x,y,z)=>hot.Shape.F(new Point3(x,y,z))>=0,
-                        (x,y,z)=>cold.Shape.F(new Point3(x,y,z))>=0).ConductanceWPerK;
+                        (x,y,z)=>cold.Shape.F(new Point3(x,y,z))>=0);
+                    state.ThermalConductanceWPerK=fieldT.ConductanceWPerK;
+                    if(scene.ThermalExpansionPerK>0)
+                    {
+                        var thermo=fem.SolveThermoElastic(fieldT,
+                            scene.ThermalExpansionPerK,scene.ThermalColdK,
+                            scene.ThermalHotK,scene.ThermalReferenceK);
+                        Check(thermo.RelativeResidual<1e-5,"Thermoelastic FEM residual");
+                        state.ThermoElasticStressMpa=thermo.MaxVonMisesMpa;
+                        state.ThermoElasticDisplacementMm=thermo.MaxDisplacementMm;
+                    }
+                }
+                if(scene.FatigueCycles>0)
+                {
+                    // Explicit constant-amplitude fully-reversed S-N screen.
+                    // For general cycles use rainflow, mean stress and
+                    // validated multi-axial material curves in future work.
+                    var sigmaA=state.MaxStress;
+                    var life=scene.FatigueReferenceCycles*Math.Pow(
+                        scene.FatigueReferenceStressMpa/Math.Max(1e-12,sigmaA),
+                        scene.FatigueExponent);
+                    state.FatigueDamage=scene.FatigueCycles/life;
                 }
             }
             return state;
@@ -207,6 +235,13 @@ internal static class UniversalDesign
                     ||state.ImpactDisplacementMm<=scene.MaxImpactDisplacementMm)
                 && (scene.MinThermalConductanceWPerK<=0
                     ||state.ThermalConductanceWPerK>=scene.MinThermalConductanceWPerK)
+                && (scene.ThermalExpansionPerK<=0||(
+                    state.ThermoElasticStressMpa<=scene.MaxThermalStressMpa &&
+                    state.ThermoElasticDisplacementMm<=scene.MaxThermalDisplacementMm))
+                && (scene.HarmonicFrequencyHz<0
+                    ||state.HarmonicDisplacementMm<=scene.MaxHarmonicDisplacementMm)
+                && (scene.FatigueCycles<=0
+                    ||state.FatigueDamage<=scene.MaxFatigueDamage)
                 && Connected(state);
         }
         var zero=new double[branches.Count];
@@ -216,14 +251,17 @@ internal static class UniversalDesign
             "Initial CSG layout violates constraints in M or direct F.");
         var current=initial;
         var metrics=new List<string>{
-            "iteration,volume_mm3,max_von_mises_mpa,max_displacement_mm,first_frequency_hz,impact_peak_mm,impact_peak_mpa,thermal_conductance_w_k,compliance_nmm,accepted_step_mm,volume_direct_f_mm3"
+            "iteration,volume_mm3,max_von_mises_mpa,max_displacement_mm,first_frequency_hz,impact_peak_mm,impact_peak_mpa,thermal_conductance_w_k,thermoelastic_peak_mpa,thermoelastic_displacement_mm,harmonic_peak_mm,fatigue_damage_screening,compliance_nmm,accepted_step_mm,volume_direct_f_mm3"
         };
         void Row(int iteration,State m,State direct,double step)
         {
             string Num(double d)=>d.ToString("G17",CultureInfo.InvariantCulture);
             metrics.Add(string.Join(",",new[]{(double)iteration,m.Volume,
                 m.MaxStress,m.MaxDisplacement,m.FrequencyHz,m.ImpactDisplacementMm,
-                m.ImpactStressMpa,m.ThermalConductanceWPerK,m.Compliance,step,direct.Volume}.Select(Num)));
+                m.ImpactStressMpa,m.ThermalConductanceWPerK,
+                m.ThermoElasticStressMpa,m.ThermoElasticDisplacementMm,
+                m.HarmonicDisplacementMm,m.FatigueDamage,
+                m.Compliance,step,direct.Volume}.Select(Num)));
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "MULTI {0}: V={1:F2} mm3 VM={2:F2} MPa u={3:F5} mm f1={4:F2} Hz shock={5:F5} mm thermal={6:F6} W/K C={7:F4}",
                 iteration,m.Volume,m.MaxStress,m.MaxDisplacement,m.FrequencyHz,
@@ -316,6 +354,10 @@ internal static class UniversalDesign
             impulsePeakDisplacementMm=current.ImpactDisplacementMm,
             impulsePeakStressMpa=current.ImpactStressMpa,
             thermalConductanceWPerK=current.ThermalConductanceWPerK,
+            thermoelasticVonMisesMpa=current.ThermoElasticStressMpa,
+            thermoelasticDisplacementMm=current.ThermoElasticDisplacementMm,
+            harmonicFirstModeDisplacementMm=current.HarmonicDisplacementMm,
+            fatigueDamageScreening=current.FatigueDamage,
             directFMaximumVonMisesMpa=directFinal.MaxStress,
             directFMaximumDisplacementMm=directFinal.MaxDisplacement,
             model="regularized immersed Hex8/FVM, linear elastic, NOT manufacturing-certified",
