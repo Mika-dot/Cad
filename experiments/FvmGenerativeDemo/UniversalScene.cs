@@ -372,6 +372,36 @@ internal sealed class UniversalScene
             if(Obstacles.Any(o=>o.Shape.F(b.Seed)>-o.Clearance-AvoidSafetyMm))
                 throw new ArgumentException($"Protected seed '{b.Id}' collides with keepout.");
         }
+        // A source fixture and a forbidden volume cannot occupy the same
+        // space. The old check covered only the interior seed and could
+        // silently CUT AWAY another part of a required user-owned body.
+        // Coarse deterministic screening catches gross contradictory input;
+        // independent final STL sampling still checks the output surface.
+        if(Obstacles.Count>0)
+        {
+            var n=new[]{
+                Math.Clamp((int)Math.Ceiling(lengths.X/FvmStep),12,30),
+                Math.Clamp((int)Math.Ceiling(lengths.Y/FvmStep),12,30),
+                Math.Clamp((int)Math.Ceiling(lengths.Z/FvmStep),12,30)};
+            for(int i=0;i<n[0];i++)for(int j=0;j<n[1];j++)for(int k=0;k<n[2];k++)
+            {
+                var p=new Point3(
+                    Min.X+lengths.X*(i+.5)/n[0],
+                    Min.Y+lengths.Y*(j+.5)/n[1],
+                    Min.Z+lengths.Z*(k+.5)/n[2]);
+                foreach(var obstacle in Obstacles)
+                {
+                    if(obstacle.Shape.F(p)<=-obstacle.Clearance-AvoidSafetyMm+.01)
+                        continue;
+                    foreach(var body in Bodies)
+                        if(body.Shape.F(p)>.01)
+                            throw new ArgumentException(
+                                $"Required body '{body.Id}' overlaps prohibited keepout "+
+                                $"'{obstacle.Id}' away from the seed at {p.X:G6},{p.Y:G6},{p.Z:G6}. "+
+                                "Move the input geometry or modify the forbidden region.");
+                }
+            }
+        }
         foreach(var (name,forces) in LoadCases)
         {
             if(forces.Count==0||forces.Values.All(v=>v.Norm()<1e-9))
