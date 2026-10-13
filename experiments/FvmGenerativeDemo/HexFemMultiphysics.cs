@@ -315,7 +315,12 @@ internal sealed partial class HexFem
                 }
                 var actualT=coldK+(hotK-coldK)*normalized;
                 var th=expansionPerK*(actualT-referenceK);
-                var h=_emin+(1-_emin)*e.FractionAtGauss[q++];
+                // Thermal eigenstrain must use exactly the same SIMP
+                // elastic stiffness factor as AssembleElement. Using the
+                // unpenalized material density while K uses rho^p creates
+                // artificial huge thermal forces in low-density regions.
+                var h=_emin+(1-_emin)*Math.Pow(
+                    e.FractionAtGauss[q++],_simpPower);
                 // D*[th,th,th,0,0,0] = (3λ+2μ)*th.
                 var thermalStress=(_elastic[0,0]+_elastic[0,1]+_elastic[0,2])*th;
                 for(int a=0;a<24;a++)
