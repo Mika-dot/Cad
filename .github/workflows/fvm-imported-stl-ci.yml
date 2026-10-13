@@ -4,6 +4,7 @@ on:
     branches: [feature/fvm-generative-mechanics]
     paths:
       - 'experiments/FvmGenerativeDemo/free_topology_imported_stl.json'
+      - 'experiments/FvmGenerativeDemo/free_topology_csg_union.json'
       - 'experiments/FvmGenerativeDemo/FreeTopologyDesign.cs'
       - 'experiments/FvmGenerativeDemo/validate_free_topology.py'
       - '.github/workflows/fvm-imported-stl-ci.yml'
@@ -27,9 +28,15 @@ jobs:
         run: |
           python experiments/FvmGenerativeDemo/validate_stl.py output/stl/initial.stl output/stl/optimized.stl
           python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_imported_stl.json output/stl
+      - name: Optimize independent connected CSG union fixture without any prescribed beams
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_csg_union.json --iterations 3 --gradient-check --self-test --out output/csg-union
+      - name: Check entire CSG union, supporting geometry, STL and forbidden volumes
+        run: |
+          python experiments/FvmGenerativeDemo/validate_stl.py output/csg-union/initial.stl output/csg-union/optimized.stl
+          python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_csg_union.json output/csg-union --require-void
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: free-fvm-imported-stl-results
-          path: output/stl
+          path: output/
           if-no-files-found: warn
