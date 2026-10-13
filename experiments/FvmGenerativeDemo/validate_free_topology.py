@@ -79,6 +79,8 @@ def validate(scene_path,results,require_void=False):
     for body in scene["bodies"]:
         shape=body["shape"]
         point=body.get("seed",shape.get("center"))
+        if point is None and "a" in shape and "b" in shape:
+            point=[(shape["a"][k]+shape["b"][k])*.5 for k in range(3)]
         if point is None:continue
         assert contains(point),f"Prescribed base body missing in optimized STL: {body['id']}"
         checked+=1
