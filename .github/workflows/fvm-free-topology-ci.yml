@@ -45,6 +45,8 @@ jobs:
         run: python experiments/FvmGenerativeDemo/validate_stl.py output/free-six/initial.stl output/free-six/optimized.stl
       - name: Independently verify six-body geometry, forbidden volumes and binary stress
         run: python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_6_bodies.json output/free-six
+      - name: Prepare actual watertight binary STL source fixture
+        run: python experiments/FvmGenerativeDemo/make_input_binary_stl.py experiments/FvmGenerativeDemo/input_cube_ascii.stl experiments/FvmGenerativeDemo/input_cube_binary.stl
       - name: Free FVM density topology with imported watertight binary STL as required fixture
         run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_imported_stl.json --iterations 3 --gradient-check --self-test --out output/free-imported-stl
       - name: Independently verify imported STL fixture, clearance and one printable connected shell
