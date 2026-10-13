@@ -339,6 +339,7 @@ internal static class UniversalDesign
         Check(Feasible(directFinal),"Final direct-F fails a physics criterion.");
         Check(Connected(current),"Final CSG terminal network disconnected.");
         File.WriteAllLines(Path.Combine(outDir,"metrics.csv"),metrics);
+        static double? Finite(double x)=>double.IsFinite(x)?x:null;
         var result=new{
             scene=Path.GetFileName(path),terminals=scene.Bodies.Count,
             supports=scene.Bodies.Count(x=>x.Role=="fixed"),
@@ -350,14 +351,14 @@ internal static class UniversalDesign
             optimizedSteps=accepted,
             finalMaximumVonMisesMpa=current.MaxStress,
             finalMaximumDisplacementMm=current.MaxDisplacement,
-            firstModeHz=current.FrequencyHz,
-            impulsePeakDisplacementMm=current.ImpactDisplacementMm,
-            impulsePeakStressMpa=current.ImpactStressMpa,
-            thermalConductanceWPerK=current.ThermalConductanceWPerK,
-            thermoelasticVonMisesMpa=current.ThermoElasticStressMpa,
-            thermoelasticDisplacementMm=current.ThermoElasticDisplacementMm,
-            harmonicFirstModeDisplacementMm=current.HarmonicDisplacementMm,
-            fatigueDamageScreening=current.FatigueDamage,
+            firstModeHz=Finite(current.FrequencyHz),
+            impulsePeakDisplacementMm=Finite(current.ImpactDisplacementMm),
+            impulsePeakStressMpa=Finite(current.ImpactStressMpa),
+            thermalConductanceWPerK=Finite(current.ThermalConductanceWPerK),
+            thermoelasticVonMisesMpa=Finite(current.ThermoElasticStressMpa),
+            thermoelasticDisplacementMm=Finite(current.ThermoElasticDisplacementMm),
+            harmonicFirstModeDisplacementMm=Finite(current.HarmonicDisplacementMm),
+            fatigueDamageScreening=Finite(current.FatigueDamage),
             directFMaximumVonMisesMpa=directFinal.MaxStress,
             directFMaximumDisplacementMm=directFinal.MaxDisplacement,
             model="regularized immersed Hex8/FVM, linear elastic, NOT manufacturing-certified",
