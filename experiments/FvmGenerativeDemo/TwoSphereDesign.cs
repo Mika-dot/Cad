@@ -571,7 +571,8 @@ internal static class TwoSphereDesign
             var d=Math.Sqrt(Dot(a,a));
             return d>1e-14?a*(1/d):new V(0,0,0);
         }
-        internal static void WriteStl(string path,FunctionalVoxelModel model,SphereScene? scene)
+        internal static void WriteStl(string path,FunctionalVoxelModel model,SphereScene? scene,
+            double pruneTinyShellFraction=0)
         {
             var grid=model.Grid;
             int nx=scene?.StandardGeometry==true?52:2*grid.Count(0);
@@ -700,6 +701,7 @@ internal static class TwoSphereDesign
             }
             var orientation=new int[triangles.Count];
             var shells=0;
+            var shellComponents=new List<(List<int> Triangles,double AbsVolume)>();
             for(int start=0;start<triangles.Count;start++)
             {
                 if(orientation[start]!=0)continue;
@@ -728,16 +730,39 @@ internal static class TwoSphereDesign
                     var (a,b,c)=triangles[id];
                     signedVolume+=Dot(a,Cross(b,c))*orientation[id]/6;
                 }
-                if(Math.Abs(signedVolume)<1e-6)
+                if(Math.Abs(signedVolume)<1e-6&&pruneTinyShellFraction<=0)
                     throw new InvalidOperationException("STL shell has zero signed volume.");
                 if(signedVolume<0)
                     foreach(var id in component)orientation[id]*=-1;
+                shellComponents.Add((component,Math.Abs(signedVolume)));
+            }
+            var removedShells=0;double removedVolume=0;
+            if(pruneTinyShellFraction>0 && shellComponents.Count>1)
+            {
+                // FVM interpolation may introduce a tiny disconnected speck
+                // with no occupied M-cell centre. Reject any substantial
+                // detached fixture or structural branch instead of masking it.
+                var main=shellComponents.Max(c=>c.AbsVolume);
+                foreach(var c in shellComponents)
+                {
+                    if(c.AbsVolume>=main)continue;
+                    if(c.Triangles.Count>80||c.AbsVolume>main*pruneTinyShellFraction)
+                        throw new InvalidOperationException(
+                            $"Disconnected STL island ({c.Triangles.Count} facets, {c.AbsVolume:G8} mm3). "+
+                            "Non-negligible disconnected material cannot be exported.");
+                    foreach(var id in c.Triangles)orientation[id]=0;
+                    removedShells++;removedVolume+=c.AbsVolume;
+                }
+                if(removedShells>0)
+                    Console.WriteLine($"STL micro-island cleanup: {removedShells} tiny component(s), "+
+                        $"total {removedVolume:G8} mm3 (not part of exported geometry).");
             }
             using var w=new StreamWriter(path,false,new UTF8Encoding(false));
             w.WriteLine("solid two_spheres_fvm_fem");
             string F(double d)=>d.ToString("G17",CultureInfo.InvariantCulture);
             for(int i=0;i<triangles.Count;i++)
             {
+                if(orientation[i]==0)continue;
                 var (a,b,c)=triangles[i];
                 if(orientation[i]<0)(b,c)=(c,b);
                 var n=Normal(Cross(b-a,c-a));
@@ -749,7 +774,7 @@ internal static class TwoSphereDesign
                 w.WriteLine("  endfacet");
             }
             w.WriteLine("endsolid two_spheres_fvm_fem");
-            Console.WriteLine($"STL {path}: {triangles.Count} triangles, {shells} closed oriented shell(s), marching tetrahedra.");
+            Console.WriteLine($"STL {path}: {triangles.Count-shellComponents.Where(c=>c.Triangles.All(i=>orientation[i]==0)).Sum(c=>c.Triangles.Count)} triangles, {shells-removedShells} retained closed oriented shell(s), marching tetrahedra.");
 
         }
     }
