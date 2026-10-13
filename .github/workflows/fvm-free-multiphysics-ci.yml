@@ -1,0 +1,32 @@
+name: Free-topology multiphysics focused regression
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/FreeTopologyDesign.cs'
+      - 'experiments/FvmGenerativeDemo/free_topology_multiphysics.json'
+      - '.github/workflows/fvm-free-multiphysics-ci.yml'
+  workflow_dispatch:
+jobs:
+  multiphysics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile solver
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Solve multi-load free topology with all physical constraints and finite difference
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/free_topology_multiphysics.json --iterations 1 --gradient-check --self-test --refinement-report --out output/multiphysics
+      - name: Verify source fixture preservation and output STL
+        run: |
+          python experiments/FvmGenerativeDemo/validate_stl.py output/multiphysics/initial.stl output/multiphysics/optimized.stl
+          python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_multiphysics.json output/multiphysics
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: free-topology-multiphysics-results
+          path: output/multiphysics
+          if-no-files-found: warn
