@@ -385,6 +385,15 @@ internal static class FreeTopologyDesign
         {
             var field=new FreeTopologyField(scene,density);
             var model=field.Sample();
+            // Fail closed for free-density designs when an STL traction
+            // patch is not on an actual exposed material/void interface.
+            // Background rho=0.9 may otherwise bury a valid SOURCE-CAD face.
+            if(!scene.PressureSurfacesExposed(q=>
+                useM?model.Approximate(new[]{q.X,q.Y,q.Z}):field.Value(q),
+                Math.Max(.5,scene.FvmStep*.5)))
+                throw new ArithmeticException(
+                    "FREE FEM STL pressure face is buried in material; "+
+                    "an exposed physical interface is required.");
             var cases=new List<Case>();
             foreach(var (name,load) in scene.LoadCases)
             {
