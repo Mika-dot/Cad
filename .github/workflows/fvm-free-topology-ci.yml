@@ -4,6 +4,8 @@ on:
     branches: [feature/fvm-generative-mechanics]
     paths:
       - 'experiments/FvmGenerativeDemo/FreeTopologyDesign.cs'
+      - 'experiments/FvmGenerativeDemo/HexFemMultiphysics.cs'
+      - 'experiments/FvmGenerativeDemo/MultiphysicsSelfTest.cs'
       - 'experiments/FvmGenerativeDemo/HexFem.cs'
       - 'experiments/FvmGenerativeDemo/TwoSphereDesign.cs'
       - 'experiments/FvmGenerativeDemo/free_topology_3_bodies.json'
