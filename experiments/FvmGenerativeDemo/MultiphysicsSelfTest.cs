@@ -95,6 +95,77 @@ internal static class MultiphysicsSelfTest
                 axialCells,faceCells,patch.Count,applied.X,result.ReactionXN,result.MaxDisplacementMm));
         }
 
+        // Load the EXACT same pressure face from a real binary STL and an
+        // ASCII STL. Unlike the watertight-solid reader, an input pressure
+        // patch intentionally consists of a two-triangle OPEN surface.
+        var surfaceA=new Point3(length,0,0);
+        var surfaceB=new Point3(length,10,0);
+        var surfaceC=new Point3(length,10,10);
+        var surfaceD=new Point3(length,0,10);
+        var patchTriangles=new[]{
+            (A:surfaceA,B:surfaceB,C:surfaceC),
+            (A:surfaceA,B:surfaceC,C:surfaceD)
+        };
+        var pressureFile=Path.Combine(Path.GetTempPath(),
+            "fvm_pressure_"+Guid.NewGuid().ToString("N")+".stl");
+        try
+        {
+            using(var writer=new BinaryWriter(File.Create(pressureFile)))
+            {
+                writer.Write(new byte[80]);
+                writer.Write((uint)patchTriangles.Length);
+                foreach(var tri in patchTriangles)
+                {
+                    writer.Write(1f);writer.Write(0f);writer.Write(0f);
+                    foreach(var p in new[]{tri.A,tri.B,tri.C})
+                    {
+                        writer.Write((float)p.X);writer.Write((float)p.Y);
+                        writer.Write((float)p.Z);
+                    }
+                    writer.Write((ushort)0);
+                }
+            }
+            for(var format=0;format<2;format++)
+            {
+                if(format==1)
+                {
+                    // ASCII patch: same oriented triangles, no closed shell.
+                    using var stl=new StreamWriter(pressureFile);
+                    stl.WriteLine("solid loaded-face");
+                    foreach(var tri in patchTriangles)
+                    {
+                        stl.WriteLine("facet normal 1 0 0");
+                        stl.WriteLine(" outer loop");
+                        foreach(var p in new[]{tri.A,tri.B,tri.C})
+                            stl.WriteLine(string.Format(
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                "vertex {0:G17} {1:G17} {2:G17}",p.X,p.Y,p.Z));
+                        stl.WriteLine(" endloop");
+                        stl.WriteLine("endfacet");
+                    }
+                    stl.WriteLine("endsolid loaded-face");
+                    stl.Flush();
+                }
+                var imported=SurfacePatchStl.Read(pressureFile,force/area);
+                Check(imported.Count==2,"ASCII/binary surface pressure STL parsing");
+                var patchFem=new HexFem(4,1,1,0,0,0,25,10,10,
+                    e,0,(_x,_y,_z)=>1,null,
+                    loadN:0,interfaceHalfWidth:0,emin:1e-5,epsF:.1,
+                    trianglePressures:imported);
+                var actual=patchFem.Solve();
+                Check(Math.Abs(patchFem.AppliedResultantN.X-force)<1e-8 &&
+                      Math.Abs(actual.ReactionXN+force)<1e-5 &&
+                      Math.Abs(actual.MaxVonMisesMpa-force/area)<1e-3,
+                      "ASCII/binary STL pressure patch must agree with exact P=p*A");
+                Console.WriteLine(
+                    format==0?"BINARY STL PRESSURE PASS":"ASCII STL PRESSURE PASS");
+            }
+        }
+        finally
+        {
+            if(File.Exists(pressureFile))File.Delete(pressureFile);
+        }
+
         var thermal=fem.ThermalConductance(45,
             (x,y,z)=>x>=length-1e-8,
             (x,y,z)=>x<=1e-8);
