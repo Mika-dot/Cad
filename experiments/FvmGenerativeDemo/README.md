@@ -266,3 +266,34 @@ dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology
 при последовательных уточнениях. Это не ошибка компиляции,
 а нормальная проверка достоверности. Ни один данный PASS
 не подтверждает промышленную безопасность изделия.
+
+
+### Новое: давление на конкретные поверхности CAD/STL вместо условных узловых сил
+
+[Математика, ограничения и JSON-пример](../../docs/FVM_SURFACE_PRESSURE_IMPLEMENTATION.md).
+Теперь C# Hex8 поддерживает (f_a=\int_{\Gamma}N_a p\mathbf n\,d\Gamma):
+**2×2 Гаусс по внешней грани Hex8** или **3-point Gauss по
+произвольным ориентированным STL-треугольникам**. Импортируются
+реальные ASCII/Binary STL **открытой нагруженной поверхности**.
+Для неё можно задать `surfacePressurePatches` с именем нагрузочного
+случая, `bodyId`, `stlFile` и `pressureMpa`.
+
+```powershell
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --validate-scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json
+dotnet run --project experiments/FvmGenerativeDemo -c Release -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --iterations 1 --self-test --out output/pressure
+```
+
+Аналитический эталон стержня: p=10 МПа, A=100 мм²,
+L=100 мм, E=200000 МПа: F=1000 Н, Rx=−1000 Н,
+u=0.005 мм, σ=10 МПа, **PASS** при нескольких шагах FEM и
+разных STL-триангуляциях. Реальная CSG сцена с 3 телами,
+площадью нагруженной грани 256 мм² и p=0.5 МПа
+(**128 Н**) получила −0.11% FEM/−0.158% STL; отступы
+и замкнутость PASS. [Linux+Windows pressure CI](https://github.com/Mika-dot/Cad/actions/runs/38421658244).
+
+**Важно:** для free-topology не допускается скрытое давление на
+поверхность, которую первоначальная полная плотностная область
+закрывает дополнительным материалом. Такая сцена теперь
+завершается ошибкой — необходимо проектировать открытое
+внешнее контактное пространство. Поддержка независимой
+контактной каверны в свободном дизайне **ещё не реализована**.
