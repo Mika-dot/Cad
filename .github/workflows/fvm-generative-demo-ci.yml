@@ -69,6 +69,8 @@ jobs:
         run: python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_forced_detour.json experiments/FvmGenerativeDemo/output/forced-detour/routes.csv experiments/FvmGenerativeDemo/output/forced-detour/initial.stl experiments/FvmGenerativeDemo/output/forced-detour/optimized.stl
       - name: Independently validate imported-mesh connectors and forbidden shaft
         run: python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_imported_stl.json experiments/FvmGenerativeDemo/output/input-stl/routes.csv experiments/FvmGenerativeDemo/output/input-stl/initial.stl experiments/FvmGenerativeDemo/output/input-stl/optimized.stl
+      - name: Negative checks - fixed/load overlap and absent physical support
+        run: python experiments/FvmGenerativeDemo/test_invalid_scenes.py experiments/FvmGenerativeDemo/bin/Release/net8.0/FvmGenerativeDemo.dll
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
