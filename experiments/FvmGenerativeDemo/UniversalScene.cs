@@ -324,7 +324,12 @@ internal sealed class UniversalScene
             value=Math.Min(value,-o.Shape.F(p)-o.Clearance);
         return value; // positive means outside all expanded forbidden regions
     }
-    internal bool SafeRoute(Point3 p)=>Within(p)&&ObstDistance(p)>BridgeRadius+.05;
+    // Path centreline must keep an entire bridge-radius clearance inside
+    // the extraction box, otherwise a clipped capsule opens the exported STL.
+    internal bool SafeRoute(Point3 p)=>
+        p.X>Min.X+BridgeRadius+.01&&p.Y>Min.Y+BridgeRadius+.01&&p.Z>Min.Z+BridgeRadius+.01
+        &&p.X<Max.X-BridgeRadius-.01&&p.Y<Max.Y-BridgeRadius-.01&&p.Z<Max.Z-BridgeRadius-.01
+        &&ObstDistance(p)>BridgeRadius+.05;
 }
 
 internal sealed class RoutedBranch
