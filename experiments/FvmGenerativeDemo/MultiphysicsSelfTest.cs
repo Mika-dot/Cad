@@ -80,6 +80,35 @@ internal static class MultiphysicsSelfTest
             (2*Math.PI*length*length)*
             Math.Sqrt(e*inertia/(rhoInertial*area));
         var beamError=Math.Abs(refinedFrequency.FrequencyHz/beamExpected-1);
+        // Thermal eigenstrain must use the SAME SIMP material interpolation
+        // as elastic stiffness. For spatially uniform rho and no external
+        // traction, changing power p rescales K and f_th equally, so u_th
+        // and stress must be invariant. This catches rho vs rho^p bugs.
+        HexFem UniformGray(double power)=>new HexFem(4,1,1,0,0,0,25,10,10,
+            e,0,(_x,_y,_z)=>0,null,
+            loadN:0,interfaceHalfWidth:20,
+            emin:1e-5,epsF:1,simpPower:power);
+        var linearGray=UniformGray(1);
+        var cubicGray=UniformGray(3);
+        var grayT=linearGray.ThermalConductance(45,
+            (x,y,z)=>x>=length-1e-8,
+            (x,y,z)=>x<=1e-8);
+        var grayT3=cubicGray.ThermalConductance(45,
+            (x,y,z)=>x>=length-1e-8,
+            (x,y,z)=>x<=1e-8);
+        var gray1=linearGray.SolveThermoElastic(grayT,12e-6,
+            coldK:293.15,hotK:313.15,referenceK:293.15);
+        var gray3=cubicGray.SolveThermoElastic(grayT3,12e-6,
+            coldK:293.15,hotK:313.15,referenceK:293.15);
+        Check(Math.Abs(gray1.MaxDisplacementMm-gray3.MaxDisplacementMm)<1e-7,
+            "SIMP eigenstrain/K consistency: thermal displacement must not depend on p for homogeneous density");
+        Check(Math.Abs(gray1.MaxVonMisesMpa-gray3.MaxVonMisesMpa)<1e-4,
+            "SIMP eigenstrain/K consistency: thermal stress must not depend on p for homogeneous density");
+        Console.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "SIMP THERMAL CONSISTENCY PASS: rho=0.5, p1/p3 u={0:G12}/{1:G12}mm VM={2:G12}/{3:G12}MPa",
+            gray1.MaxDisplacementMm,gray3.MaxDisplacementMm,
+            gray1.MaxVonMisesMpa,gray3.MaxVonMisesMpa));
+
         Console.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "MODAL REFINEMENT: coarse={0:F2} Hz, finer={1:F2} Hz, Euler={2:F2} Hz, error={3:P2}",
             mode.FrequencyHz,refinedFrequency.FrequencyHz,beamExpected,beamError));
