@@ -14,6 +14,7 @@ internal static class UniversalDesign
     {
         internal required UniversalField Field;
         internal required FunctionalVoxelModel Model;
+        internal required bool UseM;
         internal required List<ScenarioMechanics> Cases;
         internal double Volume => Cases[0].Result.VolumeMm3;
         internal double Compliance => Cases.Average(c=>c.Result.ComplianceNmm);
@@ -164,7 +165,7 @@ internal static class UniversalDesign
                 Check(Math.Abs(solve.ReactionZN+sz)<Math.Max(.1,Math.Abs(sz)*.001),"Z balance");
                 cases.Add(new ScenarioMechanics(name,fem,solve));
             }
-            var state=new State{Field=field,Model=model,Cases=cases};
+            var state=new State{Field=field,Model=model,UseM=useM,Cases=cases};
             if(extras)
             {
                 var fem=cases[0].Solver;
@@ -233,7 +234,8 @@ internal static class UniversalDesign
             for(int i=0;i<n;i++)
             {
                 var a=g.Centre(i);var p=new Point3(a[0],a[1],a[2]);
-                positive[i]=s.Model.ValueAtCentre(i)>0;
+                // Do not re-check F_M when validating independent direct F!
+                positive[i]=s.UseM?s.Model.ValueAtCentre(i)>0:s.Field.Value(p)>0;
                 if(positive[i]&&root.Shape.F(p)>=0)
                 {
                     supportedCells.Enqueue(i);visited[i]=true;
