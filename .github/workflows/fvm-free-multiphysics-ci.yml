@@ -26,6 +26,19 @@ jobs:
         run: |
           python experiments/FvmGenerativeDemo/validate_stl.py output/multiphysics/initial.stl output/multiphysics/optimized.stl
           python experiments/FvmGenerativeDemo/validate_free_topology.py experiments/FvmGenerativeDemo/free_topology_multiphysics.json output/multiphysics
+      - name: Verify three-level mesh convergence status is not confused with mechanical certification
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          path=pathlib.Path("output/multiphysics")
+          report=json.loads((path/"mesh_refinement.json").read_text())
+          summary=json.loads((path/"summary.json").read_text())
+          assert len(report["entries"])==3, report
+          assert summary["meshConvergenceScreenPassed"]==report["convergenceScreenPassed"]
+          assert summary["verifiedManufacturingStrength"] is False
+          print("PASS mesh refinement report:",report["entries"])
+          print("MESH CONVERGENCE SCREEN:",report["convergenceScreenPassed"])
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
