@@ -8,6 +8,9 @@ on:
       - 'experiments/FvmGenerativeDemo/TwoSphereDesign.cs'
       - 'experiments/FvmGenerativeDemo/free_topology_3_bodies.json'
       - 'experiments/FvmGenerativeDemo/validate_stl.py'
+      - 'experiments/FvmGenerativeDemo/validate_free_topology.py'
+      - 'experiments/FvmGenerativeDemo/free_topology_6_bodies.json'
+      - 'experiments/FvmGenerativeDemo/free_topology_multiphysics.json'
       - '.github/workflows/fvm-free-topology-ci.yml'
   workflow_dispatch:
 jobs:
