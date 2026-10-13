@@ -220,12 +220,12 @@
         "center": [
           38,
           -6,
-          0
+          -6
         ],
         "halfSize": [
           6,
           5,
-          10
+          6
         ]
       },
       "clearanceMm": 1
