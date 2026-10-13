@@ -1,5 +1,30 @@
 # Быстрый вход — ФВМ + FEM + генеративное проектирование
 
+> **АКТУАЛЬНО — 13.10.2026, ИСПРАВЛЕНО STL→Hex8 PRESSURE И ЗАЩИТА ОТ ЛОЖНОЙ СХОДИМОСТИ.**
+> В `HexFemSurfacePressure.cs` произвольный STL-треугольник
+> теперь отсекается границами пересекаемых фоновых Hex8;
+> внутри каждого полигона применяется **7-point degree-5**
+> квадратура, а не прежняя 3-point без пересечений.
+> Аналитический контроль давления/момента и сравнение
+> одного наклонного треугольника с **1024** треугольниками
+> дали относительную L2 ошибку вектора узловых сил
+> **1.738e−15**: [CI Windows/Linux #38428415781](https://github.com/Mika-dot/Cad/actions/runs/38428415781).
+> Трёхуровневый FEM теперь требует **обоих** относительных
+> уточнений в пределах порогов; давление в сцене
+> `multi_scene_surface_pressure.json` показало +57.33%
+> VM на первом и +3.76% на втором переходе, поэтому
+> `meshConvergenceScreenPassed=false`.
+> При `--require-mesh-convergence` повторный запуск
+> **не выдаёт optimized.stl**;
+> [CI Windows/Linux #38429308621](https://github.com/Mika-dot/Cad/actions/runs/38429308621) PASS.
+> При безусловном экспериментальном режиме выходной STL
+> может генерироваться, но **прочность не подтверждена**.
+> Исходники, тесты и математическое описание:
+> [FVM_SURFACE_PRESSURE_IMPLEMENTATION.md](FVM_SURFACE_PRESSURE_IMPLEMENTATION.md),
+> [FVM_FREE_TOPOLOGY_SIMP_OC.md](FVM_FREE_TOPOLOGY_SIMP_OC.md),
+> [TASK_JOURNAL.md](../experiments/FvmGenerativeDemo/TASK_JOURNAL.md).
+>
+
 > **Актуальное дополнение: СВОБОДНАЯ ТОПОЛОГИЯ С АВТОМАТИЧЕСКИМ КОНТАКТНЫМ КАНАЛОМ.**
 > В `FreeTopologyField.Value` и `DesignIsActive` включён
 > новый контактный CSG-фильтр `scene.PressureContactVoid`.
