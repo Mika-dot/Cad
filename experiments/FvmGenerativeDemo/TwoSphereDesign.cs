@@ -652,13 +652,13 @@ internal static class TwoSphereDesign
             if(triangles.Count<100)
                 throw new InvalidOperationException("STL produced too few surface facets.");
 
-            // Match vertices after the G9 STL decimal serialization. On every
+            // Match vertices at 1e-9 mm resolution after G17 STL decimal serialization. On every
             // undirected edge there must be exactly two triangles with opposing
             // directions. If one direction disagrees, flip the entire connected
             // neighbourhood instead of introducing a local crack or inversion.
             (long X,long Y,long Z) VertexId(V v) =>
-                ((long)Math.Round(v.X*10000),(long)Math.Round(v.Y*10000),
-                 (long)Math.Round(v.Z*10000));
+                ((long)Math.Round(v.X*1000000000),(long)Math.Round(v.Y*1000000000),
+                 (long)Math.Round(v.Z*1000000000));
             var edges=new Dictionary<
                 ((long,long,long) A,(long,long,long) B),List<(int Triangle,int Direction)>>();
             for(var i=0;i<triangles.Count;i++)
@@ -724,7 +724,7 @@ internal static class TwoSphereDesign
             }
             using var w=new StreamWriter(path,false,new UTF8Encoding(false));
             w.WriteLine("solid two_spheres_fvm_fem");
-            string F(double d)=>d.ToString("G9",CultureInfo.InvariantCulture);
+            string F(double d)=>d.ToString("G17",CultureInfo.InvariantCulture);
             for(int i=0;i<triangles.Count;i++)
             {
                 var (a,b,c)=triangles[i];
