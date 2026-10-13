@@ -1,0 +1,26 @@
+name: FVM Hex8 actual surface-pressure integration
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/HexFem.cs'
+      - 'experiments/FvmGenerativeDemo/MultiphysicsSelfTest.cs'
+      - '.github/workflows/fvm-surface-traction-ci.yml'
+  workflow_dispatch:
+jobs:
+  surface-traction:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile 3D FEM and boundary traction math
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Analytic pressure traction, 3 mesh sizes, all normal axes, support reactions, thermal and vibration reference tests
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --multiphysics-self-test
