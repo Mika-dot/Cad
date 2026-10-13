@@ -135,6 +135,27 @@ internal sealed class UniversalScene
     internal IReadOnlyList<HexTrianglePressure> PressureFor(string name)=>
         SurfacePressureCases.TryGetValue(name,out var triangles)
             ?triangles:Array.Empty<HexTrianglePressure>();
+    // The patch must remain on an EXPOSED material-to-void interface
+    // in the actual designed field, not merely on the source CAD body.
+    // This is a finite-sample engineering guard, not an exact contact theorem.
+    internal bool PressureSurfacesExposed(Func<Point3,double> materialField,
+        double inspectionDepthMm)
+    {
+        foreach(var patches in SurfacePressureCases.Values)
+            foreach(var triangle in patches)
+            {
+                var centre=(triangle.A+triangle.B+triangle.C)*(1.0/3);
+                var cross=Point3.Cross(triangle.B-triangle.A,
+                    triangle.C-triangle.A);
+                var n=cross*(1/cross.Norm());
+                var behind=centre-n*inspectionDepthMm;
+                var ahead=centre+n*inspectionDepthMm;
+                if(!Within(behind)||!Within(ahead)||
+                   materialField(behind)<=0||materialField(ahead)>=0)
+                    return false;
+            }
+        return true;
+    }
     internal Point3 AppliedForce(string name,Dictionary<string,Point3> forces)
     {
         var total=new Point3(forces.Values.Sum(v=>v.X),
