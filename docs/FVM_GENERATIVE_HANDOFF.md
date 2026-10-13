@@ -1,5 +1,17 @@
 # Быстрый вход — ФВМ + FEM + генеративное проектирование
 
+> **АКТУАЛЬНОЕ СОСТОЯНИЕ ПОСЛЕ ДОПОЛНИТЕЛЬНОГО АУДИТА (13.10.2026).**
+> Все изменения в ветке `feature/fvm-generative-mechanics`.
+> Основная точка входа: `experiments/FvmGenerativeDemo/FreeTopologyDesign.cs`.
+> Запуск: `dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology experiments/FvmGenerativeDemo/free_topology_6_bodies.json --iterations 3 --gradient-check --self-test --out output/design`.
+> Методика и математика: [FVM_FREE_TOPOLOGY_SIMP_OC.md](FVM_FREE_TOPOLOGY_SIMP_OC.md);
+> подробные фактические тесты: [TASK_JOURNAL.md](../experiments/FvmGenerativeDemo/TASK_JOURNAL.md).
+> Есть опциональный `projectionBeta` для настоящей гладкой Heaviside и точная обратная производная через 5 M и плотностный фильтр. Импортируется binary STL как обязательный объект; CSG union(эллипсоид,box) также используется без вручную заданных связей.
+> Проверены [STL #38395542709](https://github.com/Mika-dot/Cad/actions/runs/38395542709) −22.604% FEM/−33.046% STL; [CSG #38396009551](https://github.com/Mika-dot/Cad/actions/runs/38396009551) −21.358% FEM; [β=3 #38396472796](https://github.com/Mika-dot/Cad/actions/runs/38396472796) −25.469% FEM; [6-body #38386836326](https://github.com/Mika-dot/Cad/actions/runs/38386836326) −17.848% FEM и [multiphysics #38386829988](https://github.com/Mika-dot/Cad/actions/runs/38386829988) −5.972% FEM. Независимо проверены экспортированная STL, исходные геометрии, физические зазоры и бинарный FEM; три пространственно независимые проверки FEM-градиента.
+> ИСПРАВЛЕН ВАЖНЫЙ FEM-БАГ: термонагрузка должна масштабироваться тем же `rho^p`, что и матрица жёсткости — подтверждена инвариантность однородной термоупругости для p=1/3.
+> **Не утверждать промышленную физическую точность:** на уточнённой сетке пиковый VM отличается на ~35%; нужен convergence proof/поверхностный FEM/реальные pressure traction BC, STEP/BREP и контакты. Физические `fixed`/loads задаёт инженер; только форму соединителей система проектирует сама.
+>
+
 
 > **АКТУАЛЬНЫЙ РЕЗУЛЬТАТ 13.10.2026 — СВОБОДНАЯ ТОПОЛОГИЯ.**
 > Главный запуск: `dotnet run --project experiments/FvmGenerativeDemo -c Release -- --free-topology experiments/FvmGenerativeDemo/free_topology_3_bodies.json --iterations 3 --gradient-check --self-test --out output/free`.
