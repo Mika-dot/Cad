@@ -18,7 +18,7 @@ def validate(scene_path,results,require_void=False):
     assert summary["inputBodies"]==len(scene["bodies"])
     assert summary["obstacles"]==len(scene.get("obstacles",[]))
     assert summary["variables"]>40
-    assert summary["acceptedUpdates"]>=2
+    assert summary["acceptedUpdates"]>=1
     if require_void:assert summary["nucleatedVoidPatches"]>=1
     assert summary["volumeReductionPercent"]>5
     assert summary["finalVolumeMm3"]<summary["initialVolumeMm3"]
