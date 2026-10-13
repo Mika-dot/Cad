@@ -200,11 +200,14 @@ internal static class UniversalDesign
             var g=s.Model.Grid;var n=g.CellCount;
             var positive=new bool[n];var supportedCells=new Queue<int>();
             var visited=new bool[n];var found=new HashSet<string>();
+            // A disconnected fixed component must not be considered connected
+            // just because it is ALSO fixed. Start from ONE physical support.
+            var root=scene.Bodies.First(b=>b.Role=="fixed");
             for(int i=0;i<n;i++)
             {
                 var a=g.Centre(i);var p=new Point3(a[0],a[1],a[2]);
                 positive[i]=s.Model.ValueAtCentre(i)>0;
-                if(positive[i]&&scene.Bodies.Any(b=>b.Role=="fixed"&&b.Shape.F(p)>=0))
+                if(positive[i]&&root.Shape.F(p)>=0)
                 {
                     supportedCells.Enqueue(i);visited[i]=true;
                 }
