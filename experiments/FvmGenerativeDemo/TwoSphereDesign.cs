@@ -583,7 +583,18 @@ internal static class TwoSphereDesign
             var hz=grid.Count(2)*grid.Step(2)/nz;
             var vals=new double[nx+1,ny+1,nz+1];
             for(int i=0;i<=nx;i++)for(int j=0;j<=ny;j++)for(int k=0;k<=nz;k++)
-                vals[i,j,k]=model.Approximate(new[]{ox+hx*i,oy+hy*j,oz+hz*k});
+            {
+                var sampled=model.Approximate(new[]{ox+hx*i,oy+hy*j,oz+hz*k});
+                // Marching tetrahedra is topologically ill-defined when a
+                // sampled vertex lies on F=0: adjacent cells can produce
+                // two distinct edge crossings at essentially one point.
+                // Deterministic infinitesimal level-set perturbation avoids
+                // quantized collapsed STL edges in free-topology fields.
+                const double isoTolerance=1e-5;
+                if(Math.Abs(sampled)<isoTolerance)
+                    sampled=sampled<0?-isoTolerance:isoTolerance;
+                vals[i,j,k]=sampled;
+            }
             // Do NOT orient facets independently using noisy central-gradient
             // samples. The numerical FVM reconstruction is not a signed-distance
             // field and gradient-based orientation may flip adjacent faces.
