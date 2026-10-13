@@ -42,7 +42,7 @@ internal sealed class FreeTopologyField
             var keep=scene.ObstDistance(p)<scene.AvoidSafetyMm+scene.FvmStep*.75;
             if(body||edge<1.5*scene.FvmStep||keep)
             {
-                Locked[i]=true;Controls[i]=body?.99:.01;
+                Locked[i]=true;Controls[i]=body ? .99 : .01;
             }
             else Controls[i]=Math.Clamp(Controls[i],.01,.99);
         }
