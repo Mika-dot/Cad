@@ -146,6 +146,20 @@ internal sealed class UniversalScene
     internal double MinThermalConductanceWPerK {get;private set;}=0;
     internal string? ThermalHotId {get;private set;}
     internal string? ThermalColdId {get;private set;}
+    internal double ThermalExpansionPerK {get;private set;}=0;
+    internal double ThermalHotK {get;private set;}=373.15;
+    internal double ThermalColdK {get;private set;}=293.15;
+    internal double ThermalReferenceK {get;private set;}=293.15;
+    internal double MaxThermalStressMpa {get;private set;}=double.PositiveInfinity;
+    internal double MaxThermalDisplacementMm {get;private set;}=double.PositiveInfinity;
+    internal double HarmonicFrequencyHz {get;private set;}=-1;
+    internal double MaxHarmonicDisplacementMm {get;private set;}=double.PositiveInfinity;
+    // Constant-amplitude, fully reversed Basquin S-N *screening* only.
+    internal double FatigueCycles {get;private set;}=0;
+    internal double FatigueReferenceCycles {get;private set;}=2e6;
+    internal double FatigueReferenceStressMpa {get;private set;}=250;
+    internal double FatigueExponent {get;private set;}=5;
+    internal double MaxFatigueDamage {get;private set;}=1;
     internal int Iterations {get;private set;}=3;
     internal bool AssertDetour {get;private set;}=false;
     private static double Scalar(JsonElement e,string prop,double fallback)=>
@@ -185,6 +199,10 @@ internal sealed class UniversalScene
             s.MinFrequencyHz=Scalar(lim,"minFirstFrequencyHz",0);
             s.MaxImpactDisplacementMm=Scalar(lim,"maxImpactDisplacementMm",double.PositiveInfinity);
             s.MinThermalConductanceWPerK=Scalar(lim,"minThermalConductanceWPerK",0);
+            s.MaxThermalStressMpa=Scalar(lim,"maxThermalVonMisesMpa",double.PositiveInfinity);
+            s.MaxThermalDisplacementMm=Scalar(lim,"maxThermalDisplacementMm",double.PositiveInfinity);
+            s.MaxHarmonicDisplacementMm=Scalar(lim,"maxHarmonicDisplacementMm",double.PositiveInfinity);
+            s.MaxFatigueDamage=Scalar(lim,"maxFatigueDamage",1);
         }
         if(j.TryGetProperty("impact",out var imp))
         {
@@ -196,6 +214,22 @@ internal sealed class UniversalScene
         {
             s.ThermalHotId=thermal.GetProperty("hotBody").GetString();
             s.ThermalColdId=thermal.GetProperty("coldBody").GetString();
+            s.ThermalExpansionPerK=Scalar(thermal,"expansionPerK",0);
+            s.ThermalHotK=Scalar(thermal,"hotKelvin",373.15);
+            s.ThermalColdK=Scalar(thermal,"coldKelvin",293.15);
+            s.ThermalReferenceK=Scalar(thermal,"referenceKelvin",293.15);
+        }
+        if(j.TryGetProperty("harmonic",out var harmonic))
+        {
+            s.HarmonicFrequencyHz=Scalar(harmonic,"frequencyHz",-1);
+            s.DampingRatio=Scalar(harmonic,"dampingRatio",s.DampingRatio);
+        }
+        if(j.TryGetProperty("fatigueScreen",out var fatigue))
+        {
+            s.FatigueCycles=Scalar(fatigue,"cycles",0);
+            s.FatigueReferenceCycles=Scalar(fatigue,"referenceLifeCycles",s.FatigueReferenceCycles);
+            s.FatigueReferenceStressMpa=Scalar(fatigue,"referenceStressMpa",s.FatigueReferenceStressMpa);
+            s.FatigueExponent=Scalar(fatigue,"basquinExponent",s.FatigueExponent);
         }
         foreach(var b in j.GetProperty("bodies").EnumerateArray())
         {
@@ -237,7 +271,11 @@ internal sealed class UniversalScene
            ||RouteStep<=0||FvmStep<=0||BridgeRadius<=0||Young<=0
            ||Poisson<=-1||Poisson>=.5||StressLimit<=0||DisplacementLimit<=0
            ||Iterations<1||Iterations>20||ImpactPulseSeconds<=0||DampingRatio<0
-           ||DampingRatio>1||DensityKgMm3<=0||ThermalConductivityWmK<=0)
+           ||DampingRatio>1||DensityKgMm3<=0||ThermalConductivityWmK<=0
+           ||ThermalExpansionPerK<0||ThermalHotK<=0||ThermalColdK<=0
+           ||ThermalReferenceK<=0||FatigueReferenceCycles<=0
+           ||FatigueReferenceStressMpa<=0||FatigueExponent<=0||FatigueCycles<0
+           ||MaxFatigueDamage<=0)
             throw new ArgumentException("Invalid scene dimensions, material or optimization settings.");
         if(FemCells.Any(c=>c<3||c>25))throw new ArgumentException("femCells must be 3..25 per axis.");
         var nb=new[]{lengths.X/RouteStep,lengths.Y/RouteStep,lengths.Z/RouteStep};
@@ -265,7 +303,7 @@ internal sealed class UniversalScene
                 if(!Bodies.Any(b=>b.Id==id&&b.Role!="fixed"))
                     throw new ArgumentException($"Load target '{id}' absent or fixed.");
         }
-        if(MinThermalConductanceWPerK>0 &&
+        if((MinThermalConductanceWPerK>0||ThermalExpansionPerK>0) &&
            (ThermalHotId is null||ThermalColdId is null||
             !Bodies.Any(b=>b.Id==ThermalHotId)||
             !Bodies.Any(b=>b.Id==ThermalColdId)||
