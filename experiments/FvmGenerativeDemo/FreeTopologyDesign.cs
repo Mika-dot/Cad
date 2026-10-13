@@ -585,13 +585,20 @@ internal static class FreeTopologyDesign
             // it. Only its FEM / CSG / multi-physics-validated result is kept.
             // This is actual void nucleation, not thinning a predefined beam.
             var choices=Enumerable.Range(0,current.Field.Variables)
-                .Where(i=>!current.Field.Locked[i]&&
-                    current.Field.Grid.Index(i,0)>2&&
-                    current.Field.Grid.Index(i,1)>2&&
-                    current.Field.Grid.Index(i,2)>2&&
-                    current.Field.Grid.Index(i,0)<current.Field.Grid.Count(0)-3&&
-                    current.Field.Grid.Index(i,1)<current.Field.Grid.Count(1)-3&&
-                    current.Field.Grid.Index(i,2)<current.Field.Grid.Count(2)-3)
+                // Select low-energy exterior-accessible removal zones first:
+                // buried voids would create an unvented secondary cavity STL
+                // shell, whereas a topology opening through the exterior is
+                // unambiguously printable and preserves one closed boundary.
+                .Where(i=>
+                {
+                    if(current.Field.Locked[i])return false;
+                    var g=current.Field.Grid;
+                    var x=g.Index(i,0);var y=g.Index(i,1);var z=g.Index(i,2);
+                    if(x<2||y<2||z<2||x>g.Count(0)-3||
+                       y>g.Count(1)-3||z>g.Count(2)-3)return false;
+                    return x==2||y==2||z==2||
+                        x==g.Count(0)-3||y==g.Count(1)-3||z==g.Count(2)-3;
+                })
                 .OrderBy(i=>Math.Abs(gC[i])/(Math.Abs(gV[i])+1e-8))
                 .Take(8).ToArray();
             foreach(var centre in choices)
