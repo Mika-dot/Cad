@@ -55,6 +55,12 @@ jobs:
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_imported_stl.json --iterations 1 --out experiments/FvmGenerativeDemo/output/input-stl
       - name: Validate optimized CAD STL import result
         run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/input-stl/initial.stl experiments/FvmGenerativeDemo/output/input-stl/optimized.stl
+      - name: Independently validate actual multi-6 STL material against CSG keepouts
+        run: python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_6_bodies.json experiments/FvmGenerativeDemo/output/multi-6/routes.csv experiments/FvmGenerativeDemo/output/multi-6/initial.stl experiments/FvmGenerativeDemo/output/multi-6/optimized.stl
+      - name: Independently validate detour shape and clearance against pillar
+        run: python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_forced_detour.json experiments/FvmGenerativeDemo/output/forced-detour/routes.csv experiments/FvmGenerativeDemo/output/forced-detour/initial.stl experiments/FvmGenerativeDemo/output/forced-detour/optimized.stl
+      - name: Independently validate imported-mesh connectors and forbidden shaft
+        run: python experiments/FvmGenerativeDemo/validate_keepouts.py experiments/FvmGenerativeDemo/multi_scene_imported_stl.json experiments/FvmGenerativeDemo/output/input-stl/routes.csv experiments/FvmGenerativeDemo/output/input-stl/initial.stl experiments/FvmGenerativeDemo/output/input-stl/optimized.stl
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
