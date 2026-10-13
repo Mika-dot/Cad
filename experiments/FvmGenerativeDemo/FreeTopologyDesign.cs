@@ -440,10 +440,12 @@ internal static class FreeTopologyDesign
         // solid/void reconstruction (no SIMP grey interpolation). Use the
         // SAME actual 5M field whose zero-isosurface is exported to STL.
         // A successful continuous-density solve is NOT enough by itself.
-        (double Volume,double Stress,double Displacement,double Compliance) BinaryCheck(State state)
+        (double Volume,double Stress,double Displacement,double Compliance,bool AdditionalPass) BinaryCheck(State state)
         {
             var shape=state.M;
             double volume=0,stress=0,displacement=0,compliance=0;
+            bool additionalPass=true;
+            int caseIndex=0;
             foreach(var (name,loads) in scene.LoadCases)
             {
                 (double X,double Y,double Z) Load(double x,double y,double z)
@@ -470,15 +472,62 @@ internal static class FreeTopologyDesign
                 stress=Math.Max(stress,r.MaxVonMisesMpa);
                 displacement=Math.Max(displacement,r.MaxDisplacementMm);
                 compliance+=r.ComplianceNmm/scene.LoadCases.Count;
+                // Revalidate enabled dynamics and thermal limits for the
+                // BINARY model, not only its continuously gray SIMP proxy.
+                if(scene.MinFrequencyHz>0)
+                    additionalPass &= fem.FirstNaturalFrequency(
+                        scene.DensityKgMm3).FrequencyHz>=scene.MinFrequencyHz;
+                if(scene.HarmonicFrequencyHz>=0)
+                    additionalPass &= fem.HarmonicFirstModeMaxDisplacement(
+                        scene.DensityKgMm3,scene.HarmonicFrequencyHz,
+                        scene.DampingRatio)<=scene.MaxHarmonicDisplacementMm;
+                if(double.IsFinite(scene.MaxImpactDisplacementMm)||
+                   double.IsFinite(scene.MaxImpactVonMisesMpa))
+                {
+                    var impulse=fem.SolvePulse(scene.DensityKgMm3,
+                        scene.ImpactPulseSeconds,scene.ImpactMultiplier,
+                        scene.DampingRatio);
+                    additionalPass &= impulse.MaxDisplacementMm<=scene.MaxImpactDisplacementMm;
+                    additionalPass &= impulse.MaxVonMisesMpa<=scene.MaxImpactVonMisesMpa;
+                }
+                if(caseIndex==0&&(scene.MinThermalConductanceWPerK>0||
+                                  scene.ThermalExpansionPerK>0))
+                {
+                    var hot=scene.Bodies.First(b=>b.Id==scene.ThermalHotId);
+                    var cold=scene.Bodies.First(b=>b.Id==scene.ThermalColdId);
+                    var thermal=fem.ThermalConductance(
+                        scene.ThermalConductivityWmK,
+                        (x,y,z)=>hot.Shape.F(new Point3(x,y,z))>=0,
+                        (x,y,z)=>cold.Shape.F(new Point3(x,y,z))>=0);
+                    additionalPass &= thermal.ConductanceWPerK>=scene.MinThermalConductanceWPerK;
+                    if(scene.ThermalExpansionPerK>0)
+                    {
+                        var thermo=fem.SolveThermoElastic(thermal,
+                            scene.ThermalExpansionPerK,scene.ThermalColdK,
+                            scene.ThermalHotK,scene.ThermalReferenceK);
+                        additionalPass &= thermo.RelativeResidual<1e-5;
+                        additionalPass &= thermo.MaxVonMisesMpa<=scene.MaxThermalStressMpa;
+                        additionalPass &= thermo.MaxDisplacementMm<=scene.MaxThermalDisplacementMm;
+                    }
+                }
+                caseIndex++;
             }
-            return (volume,stress,displacement,compliance);
+            if(scene.FatigueCycles>0)
+            {
+                var cycles=scene.FatigueReferenceCycles*Math.Pow(
+                    scene.FatigueReferenceStressMpa/Math.Max(stress,1e-9),
+                    scene.FatigueExponent);
+                additionalPass &= scene.FatigueCycles/cycles<=scene.MaxFatigueDamage;
+            }
+            return (volume,stress,displacement,compliance,additionalPass);
         }
         bool BinaryFeasible(State state,double maxAllowedCompliance)
         {
             var binary=BinaryCheck(state);
             return binary.Stress<=scene.StressLimit &&
                 binary.Displacement<=scene.DisplacementLimit &&
-                binary.Compliance<=maxAllowedCompliance;
+                binary.Compliance<=maxAllowedCompliance &&
+                binary.AdditionalPass;
         }
 
         var initial=Analyze(start.Controls,true,true);
@@ -650,8 +699,8 @@ internal static class FreeTopologyDesign
         var finalBinary=BinaryCheck(current);
         Check(finalBinary.Stress<=scene.StressLimit&&
             finalBinary.Displacement<=scene.DisplacementLimit&&
-            finalBinary.Compliance<=maxCompliance,
-            "Exported binary field violates final physical restrictions.");
+            finalBinary.Compliance<=maxCompliance&&finalBinary.AdditionalPass,
+            "Exported binary field violates final static or multi-physics restrictions.");
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
             "BINARY FEM PASS: V={0:F2} mm3, VM={1:F3} MPa, u={2:F6} mm, C={3:F5} Nmm (actual 5M material/void classification)",
             finalBinary.Volume,finalBinary.Stress,finalBinary.Displacement,finalBinary.Compliance));
@@ -686,6 +735,7 @@ internal static class FreeTopologyDesign
             binaryMaximumVonMisesMpa=finalBinary.Stress,
             binaryMaximumDisplacementMm=finalBinary.Displacement,
             binaryComplianceNmm=finalBinary.Compliance,
+            binaryMultiphysicsFeasible=finalBinary.AdditionalPass,
             firstFrequencyHz=double.IsFinite(current.FirstHz)?current.FirstHz:(double?)null,
             worstImpactMm=double.IsFinite(current.ImpactMm)?current.ImpactMm:(double?)null,
             worstImpactStressMpa=double.IsFinite(current.ImpactStress)?current.ImpactStress:(double?)null,
