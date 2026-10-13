@@ -90,6 +90,18 @@ internal static class UniversalDesign
             counts[b.Id]=n;
             Check(n>=1,$"No FEM node in protected body '{b.Id}'. Refine femCells.");
         }
+        // Explicitly reject applying forces at clamped DOFs. HexFem otherwise
+        // zeros their RHS values, silently changing the physical load case.
+        foreach(var (name,loads) in scene.LoadCases)
+            foreach(var (id,force) in loads)
+            {
+                var body=scene.Bodies.First(v=>v.Id==id);
+                if(force.Norm()>0&&xcoords.Any(c=>Supports(c.X,c.Y,c.Z)
+                    &&body.Shape.F(new Point3(c.X,c.Y,c.Z))>=0))
+                    throw new InvalidOperationException(
+                        $"Load case '{name}', body '{id}' shares fixed FEM nodes. "+
+                        "The prescribed load would be silently lost at fixed DOFs.");
+            }
         State Analyze(double[] p,bool useM,bool extras)
         {
             var field=new UniversalField(scene,branches,p);
@@ -149,15 +161,21 @@ internal static class UniversalDesign
                 var fem=cases[0].Solver;
                 if(scene.MinFrequencyHz>0||scene.HarmonicFrequencyHz>=0)
                     state.FrequencyHz=fem.FirstNaturalFrequency(scene.DensityKgMm3).FrequencyHz;
+                // Dynamic forcing MUST cover ALL input load cases; one modal
+                // stiffness/mass operator suffices, but modal force and impulse
+                // histories depend on each load-case RHS independently.
                 if(scene.HarmonicFrequencyHz>=0)
-                    state.HarmonicDisplacementMm=fem.HarmonicFirstModeMaxDisplacement(
-                        scene.DensityKgMm3,scene.HarmonicFrequencyHz,scene.DampingRatio);
-                if(double.IsFinite(scene.MaxImpactDisplacementMm))
+                    state.HarmonicDisplacementMm=cases.Max(c=>
+                        c.Solver.HarmonicFirstModeMaxDisplacement(
+                            scene.DensityKgMm3,scene.HarmonicFrequencyHz,scene.DampingRatio));
+                if(double.IsFinite(scene.MaxImpactDisplacementMm)||
+                    double.IsFinite(scene.MaxImpactVonMisesMpa))
                 {
-                    var impact=fem.SolvePulse(scene.DensityKgMm3,scene.ImpactPulseSeconds,
-                        scene.ImpactMultiplier,scene.DampingRatio);
-                    state.ImpactDisplacementMm=impact.MaxDisplacementMm;
-                    state.ImpactStressMpa=impact.MaxVonMisesMpa;
+                    var impacts=cases.Select(c=>c.Solver.SolvePulse(
+                        scene.DensityKgMm3,scene.ImpactPulseSeconds,
+                        scene.ImpactMultiplier,scene.DampingRatio)).ToArray();
+                    state.ImpactDisplacementMm=impacts.Max(v=>v.MaxDisplacementMm);
+                    state.ImpactStressMpa=impacts.Max(v=>v.MaxVonMisesMpa);
                 }
                 if(scene.MinThermalConductanceWPerK>0||scene.ThermalExpansionPerK>0)
                 {
@@ -236,6 +254,8 @@ internal static class UniversalDesign
                 && (scene.MinFrequencyHz<=0||state.FrequencyHz>=scene.MinFrequencyHz)
                 && (!double.IsFinite(scene.MaxImpactDisplacementMm)
                     ||state.ImpactDisplacementMm<=scene.MaxImpactDisplacementMm)
+                && (!double.IsFinite(scene.MaxImpactVonMisesMpa)
+                    ||state.ImpactStressMpa<=scene.MaxImpactVonMisesMpa)
                 && (scene.MinThermalConductanceWPerK<=0
                     ||state.ThermalConductanceWPerK>=scene.MinThermalConductanceWPerK)
                 && (scene.ThermalExpansionPerK<=0||(
