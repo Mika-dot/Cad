@@ -39,4 +39,14 @@ copy["bodies"][0]["role"]="anchor"
 copy["bodies"][1]["shape"]["center"]=[30,0,0]
 copy["bodies"][1]["seed"]=[30,0,0]
 run_bad("no declared physical support",copy,"at least one fixed")
-print("PASS two invalid physical scenes fail closed")
+conflict=json.loads(json.dumps(scene))
+conflict["bodies"][1]["shape"]["center"]=[30,0,0]
+conflict["bodies"][1]["seed"]=[30,0,0]
+conflict["obstacles"]=[{
+    "id":"forbidden-cuts-fixed-shell",
+    "shape":{"type":"sphere","center":[10,0,0],"radius":3},
+    "clearanceMm":0.0
+}]
+run_bad("mandatory fixture intersects forbidden region away from seed",
+        conflict,"overlaps prohibited keepout")
+print("PASS three invalid geometry and FEM scenarios fail closed")
