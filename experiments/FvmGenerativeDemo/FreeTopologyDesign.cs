@@ -851,20 +851,40 @@ internal static class FreeTopologyDesign
             var displacementChange=100*(last.Displacement/
                 Math.Max(1e-12,previousLevel.Displacement)-1);
             var volumeChange=100*(last.Volume/Math.Max(1e-12,previousLevel.Volume)-1);
-            meshConverged=levels.Count>=3 && Math.Abs(stressChange)<10 &&
-                Math.Abs(displacementChange)<10 && Math.Abs(volumeChange)<5;
+            // Requiring only the LAST step to be small can falsely pass
+            // under oscillatory/discontinuous cut-cell stress sampling. A
+            // 57% first jump followed by a 3% second jump is NOT enough
+            // to establish any stability of the initial design stress.
+            var transitions=Enumerable.Range(1,levels.Count-1).Select(index=>
+            {
+                var a=levels[index-1];var b=levels[index];
+                return new{
+                    fromCells=a.Cells,toCells=b.Cells,
+                    relativeVolumePercent=100*(b.Volume/Math.Max(1e-12,a.Volume)-1),
+                    relativeStressPercent=100*(b.Stress/Math.Max(1e-12,a.Stress)-1),
+                    relativeDisplacementPercent=100*(b.Displacement/Math.Max(1e-12,a.Displacement)-1)
+                };
+            }).ToArray();
+            meshConverged=levels.Count>=3 && transitions.All(t=>
+                Math.Abs(t.relativeStressPercent)<10 &&
+                Math.Abs(t.relativeDisplacementPercent)<10 &&
+                Math.Abs(t.relativeVolumePercent)<5);
             Console.WriteLine($"MESH CONVERGENCE SCREEN: " +
-                (meshConverged.Value?"PASS indicative tolerance on last refinement":"NOT CONVERGED, further FEM refinement required"));
+                (meshConverged.Value?"PASS indicative tolerance on BOTH refinements":"NOT CONVERGED, at least one Hex8 mesh transition exceeds tolerance"));
             var report=new{
                 entries=levels.Select(l=>new{
                     cells=l.Cells,volumeMm3=l.Volume,
                     maxVonMisesMpa=l.Stress,maxDisplacementMm=l.Displacement
                 }).ToArray(),
+                transitions,
                 convergenceScreenPassed=meshConverged,
                 lastRefinementRelativeVolumePercent=volumeChange,
                 lastRefinementRelativeStressPercent=stressChange,
                 lastRefinementRelativeDisplacementPercent=displacementChange,
-                caveat="Only three grids, geometry/H_epsilon/BC still approximate; pass is not a certified error bound"
+                maxAbsRefinementVolumePercent=transitions.Max(t=>Math.Abs(t.relativeVolumePercent)),
+                maxAbsRefinementStressPercent=transitions.Max(t=>Math.Abs(t.relativeStressPercent)),
+                maxAbsRefinementDisplacementPercent=transitions.Max(t=>Math.Abs(t.relativeDisplacementPercent)),
+                caveat="Requires BOTH sequential refinements within tolerance, but three background Hex8 levels do not prove convergence of stress near CSG/STL cut cells"
             };
             File.WriteAllText(Path.Combine(outDir,"mesh_refinement.json"),
                 JsonSerializer.Serialize(report,
