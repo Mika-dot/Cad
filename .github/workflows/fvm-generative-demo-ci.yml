@@ -45,6 +45,10 @@ jobs:
         run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_6_bodies.json --iterations 1 --self-test --out experiments/FvmGenerativeDemo/output/multi-6
       - name: Validate connected, watertight multi-terminal STL
         run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/multi-6/initial.stl experiments/FvmGenerativeDemo/output/multi-6/optimized.stl
+      - name: Force a real 3D detour around a blocking cylinder
+        run: dotnet run --project experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --no-build -- --multi-scene experiments/FvmGenerativeDemo/multi_scene_forced_detour.json --iterations 1 --out experiments/FvmGenerativeDemo/output/forced-detour
+      - name: Check watertight, connected detour STL
+        run: python experiments/FvmGenerativeDemo/validate_stl.py experiments/FvmGenerativeDemo/output/forced-detour/initial.stl experiments/FvmGenerativeDemo/output/forced-detour/optimized.stl
       - name: Run original five-M kernel tests
         run: dotnet test tests/DCad.FunctionalVoxel.Tests/DCad.FunctionalVoxel.Tests.csproj -c Release
       - name: Upload numerical CSV and BMP evidence
