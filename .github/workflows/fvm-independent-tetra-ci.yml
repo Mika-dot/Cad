@@ -1,0 +1,62 @@
+name: Independent STL T4 FEM verification
+on:
+  push:
+    branches: [feature/fvm-generative-mechanics]
+    paths:
+      - 'experiments/FvmGenerativeDemo/independent_tetra_fem.py'
+      - '.github/workflows/fvm-independent-tetra-ci.yml'
+      - 'experiments/FvmGenerativeDemo/HexFemSurfacePressure.cs'
+      - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
+  workflow_dispatch:
+jobs:
+  independent-tetra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install independent sparse linear algebra
+        run: python -m pip install --disable-pip-version-check numpy scipy
+      - name: Independently derive T4 FEM analytic bar, three resolutions
+        run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --self-test
+      - name: Strict .NET compile
+        run: dotnet build experiments/FvmGenerativeDemo/FvmGenerativeDemo.csproj -c Release --warnaserror
+      - name: Create actual optimized five-M STL driven by physical pressure
+        run: dotnet run --project experiments/FvmGenerativeDemo -c Release --no-build -- --free-topology experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --iterations 2 --self-test --out output/independent-tetra
+      - name: Independently check exported manifold STL
+        run: python experiments/FvmGenerativeDemo/validate_stl.py output/independent-tetra/initial.stl output/independent-tetra/optimized.stl
+      - name: Independent tetra FEM from actual optimized STL, first background resolution
+        run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/independent-tetra/optimized.stl --cells 10 7 6 --pressure-subdivisions 12 --out output/independent-tetra/tetra_coarse.json
+      - name: Independent tetra FEM from identical STL, independent finer grid
+        run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/independent-tetra/optimized.stl --cells 14 10 8 --pressure-subdivisions 12 --out output/independent-tetra/tetra_refined.json
+      - name: Validate independent equilibrium, positive finite stress, refine diagnostics
+        run: |
+          python - <<'PY'
+          import json,math
+          from pathlib import Path
+          folder=Path('output/independent-tetra')
+          a=json.loads((folder/'tetra_coarse.json').read_text())
+          b=json.loads((folder/'tetra_refined.json').read_text())
+          for s in (a,b):
+              assert s['forceBalanceRelativeError']<1e-5,s
+              assert abs(s['forceN'][0]-128)<1e-5,s
+              assert abs(s['reactionN'][0]+128)<1e-5,s
+              assert s['solidTetraCount']>100,s
+              for x in ('maxVonMisesMpa','maxDisplacementMm','regularizedSolidVolumeMm3','complianceNmm'):
+                  assert math.isfinite(s[x]) and s[x]>0,(x,s)
+          print('T4 REAL PRINTED STL PASS: coarse VM',a['maxVonMisesMpa'],
+                'MPa refined VM',b['maxVonMisesMpa'],'MPa; coarse u',
+                a['maxDisplacementMm'],'mm refined u',b['maxDisplacementMm'],'mm')
+          print('Caveat: independent T4 still immersed binary voxels; not surface fitted or certified.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-tetra-STL-and-FEM
+          path: output/independent-tetra
+          if-no-files-found: warn
