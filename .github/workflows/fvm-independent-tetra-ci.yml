@@ -4,6 +4,7 @@ on:
     branches: [feature/fvm-generative-mechanics]
     paths:
       - 'experiments/FvmGenerativeDemo/independent_tetra_fem.py'
+      - 'experiments/FvmGenerativeDemo/compare_fem_discretizations.py'
       - '.github/workflows/fvm-independent-tetra-ci.yml'
       - 'experiments/FvmGenerativeDemo/HexFemSurfacePressure.cs'
       - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
@@ -53,6 +54,26 @@ jobs:
                 'MPa refined VM',b['maxVonMisesMpa'],'MPa; coarse u',
                 a['maxDisplacementMm'],'mm refined u',b['maxDisplacementMm'],'mm')
           print('Caveat: independent T4 still immersed binary voxels; not surface fitted or certified.')
+          PY
+      - name: Compare T4 and C# Hex8 physical predictions, retain stress disagreement
+        run: python experiments/FvmGenerativeDemo/compare_fem_discretizations.py output/independent-tetra/summary.json output/independent-tetra/tetra_coarse.json output/independent-tetra/tetra_refined.json --out output/independent-tetra/fem_cross_check.json
+      - name: Strict cross-discretization verification must reject unresolved mechanical disagreement
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          root=Path('output/independent-tetra')
+          evidence=json.loads((root/'fem_cross_check.json').read_text())
+          assert not evidence['screeningAgreementPassed'], "Reference test unexpectedly agrees; inspect before updating the regression."
+          assert evidence['verifiedManufacturingStrength'] is False
+          args=[sys.executable,'experiments/FvmGenerativeDemo/compare_fem_discretizations.py',
+                str(root/'summary.json'),str(root/'tetra_coarse.json'),
+                str(root/'tetra_refined.json'),'--out',
+                str(root/'fem_strict.json'),'--require-agreement']
+          result=subprocess.run(args,capture_output=True,text=True,timeout=30)
+          assert result.returncode!=0,result.stdout
+          assert 'T4/Hex8 DISCRETIZATION AGREEMENT NOT DEMONSTRATED' in result.stderr+result.stdout
+          print('PASS: contradictory independent FEM predictions are rejected, never called strength-certified.')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
