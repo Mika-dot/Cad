@@ -102,6 +102,49 @@ public sealed class FunctionalVoxelModel
         return accumulated;
     }
 
+    /// <summary>
+    /// Integrates the sign of the reconstructed five-M field over a rectangular
+    /// physical element. This is a sampled immersed-cell volume fraction, not
+    /// an exact intersection with F=0 or an independent voxel occupancy map.
+    /// Integration samples lie strictly within the model grid. The caller
+    /// controls resolution; the result is suitable for cut-cell diagnostics,
+    /// not a certified volume or a substitute for stiffness quadrature.
+    /// </summary>
+    public double SampledSolidFraction(ReadOnlySpan<double> minimum,
+        ReadOnlySpan<double> maximum, int samplesPerAxis = 2)
+    {
+        if (Dimension != 3) throw new InvalidOperationException(
+            "Solid-fraction integration requires a three-dimensional FVM model.");
+        if (minimum.Length != 3 || maximum.Length != 3)
+            throw new ArgumentException("Expected three-dimensional element bounds.");
+        if (samplesPerAxis < 1 || samplesPerAxis > 16)
+            throw new ArgumentOutOfRangeException(nameof(samplesPerAxis));
+        var step = new double[3];
+        for (var a = 0; a < 3; a++)
+        {
+            if (!double.IsFinite(minimum[a]) || !double.IsFinite(maximum[a]) ||
+                maximum[a] <= minimum[a] ||
+                minimum[a] < Grid.Minimum(a) ||
+                maximum[a] > Grid.Minimum(a) + Grid.Step(a) * Grid.Count(a))
+                throw new ArgumentOutOfRangeException(nameof(minimum),
+                    "Element bounds must be finite and contained in the five-M lattice.");
+            step[a] = (maximum[a] - minimum[a]) / samplesPerAxis;
+        }
+        var positive = 0;
+        var total = checked(samplesPerAxis * samplesPerAxis * samplesPerAxis);
+        var point = new double[3];
+        for (var i = 0; i < samplesPerAxis; i++)
+        for (var j = 0; j < samplesPerAxis; j++)
+        for (var k = 0; k < samplesPerAxis; k++)
+        {
+            point[0] = minimum[0] + (i + .5) * step[0];
+            point[1] = minimum[1] + (j + .5) * step[1];
+            point[2] = minimum[2] + (k + .5) * step[2];
+            if (Approximate(point) >= 0) positive++;
+        }
+        return positive / (double)total;
+    }
+
     /// <summary>Fixed sign-normalized RGB24 mapping used in published M-images.</summary>
     public EncodedMImages EncodeRgb24() => EncodedMImages.EncodeCanonical(Grid, _channels);
 
