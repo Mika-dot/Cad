@@ -60,7 +60,7 @@ def analyze(hex_summary,t4_coarse,t4_refined):
             raise ValueError(f"Invalid {label} ersatz-only load fraction: {fraction!r}")
         if not isinstance(count,int) or count<1:
             raise ValueError(f"Invalid {label} solid component count: {count!r}")
-    validTopology=
+    validTopology=(
         all(t4["solidConnectedComponents"]==1 and
             t4["loadedMaterialConnectedToSupport"] and
             t4["fractionOfNodalLoadOnErsatzVoid"]<.01
