@@ -499,12 +499,12 @@ internal static class FreeTopologyDesign
                 }
                 var fem=new HexFem(nx,ny,nz,origin.X,origin.Y,origin.Z,hx,hy,hz,
                     scene.Young,scene.Poisson,
-                    (x,y,z)=>shape.Approximate(new[]{x,y,z})>=0?
-                        state.Field.Eps*1.01:-state.Field.Eps*1.01,
-                    model:null,loadN:0,interfaceHalfWidth:0,emin:1e-4,
+                    (x,y,z)=>shape.Approximate(new[]{x,y,z}),
+                    model:shape,loadN:0,interfaceHalfWidth:0,emin:1e-4,
                     epsF:state.Field.Eps,support:Fixed,nodalForce:Load,
                     densityKgMm3:scene.DensityKgMm3,simpPower:1,
-                    trianglePressures:scene.PressureFor(name));
+                    trianglePressures:scene.PressureFor(name),
+                    fiveMBinaryCutCell:true);
                 var r=fem.Solve(maxIterations:3000);
                 Check(r.RelativeEquilibriumResidual<1e-6,
                     "Binary FEM numerical residual: "+name);
