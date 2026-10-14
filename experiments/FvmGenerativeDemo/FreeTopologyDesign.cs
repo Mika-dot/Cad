@@ -915,6 +915,46 @@ internal static class FreeTopologyDesign
                     current.Field.Locked[i].ToString()}));
             }
         }
+        // Structural cut-cell diagnostics derive exclusively from the actual
+        // five-M geometry used by the adjoint solver and STL exporter.
+        // Coarse/fine sampled occupancy disagreement is a discretization
+        // warning, not a guarantee that stress hotspots have converged.
+        double fvmCutCellVolume=0;
+        double fvmFineVolume=0;
+        int fvmCutCells=0;
+        double maximumFractionDelta=0;
+        for(int ix=0;ix<nx;ix++)
+        for(int iy=0;iy<ny;iy++)
+        for(int iz=0;iz<nz;iz++)
+        {
+            var lo=new[]{origin.X+ix*hx,origin.Y+iy*hy,origin.Z+iz*hz};
+            var hi=new[]{lo[0]+hx,lo[1]+hy,lo[2]+hz};
+            var coarse=current.M.SampledSolidFraction(lo,hi,2);
+            var fine=current.M.SampledSolidFraction(lo,hi,4);
+            var cellVolume=hx*hy*hz;
+            fvmCutCellVolume+=coarse*cellVolume;
+            fvmFineVolume+=fine*cellVolume;
+            maximumFractionDelta=Math.Max(maximumFractionDelta,Math.Abs(coarse-fine));
+            if(fine>0&&fine<1)fvmCutCells++;
+        }
+        var fractionVolumeChange=100*(fvmFineVolume/
+            Math.Max(fvmCutCellVolume,1e-12)-1);
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "FVM FIVE-M CUT CELLS: partial={0} sampled V(2)={1:F3} mm3 V(4)={2:F3} mm3 change={3:F3}% maximum element fraction delta={4:F3}; screening only",
+            fvmCutCells,fvmCutCellVolume,fvmFineVolume,
+            fractionVolumeChange,maximumFractionDelta));
+        File.WriteAllText(Path.Combine(outDir,"fvm_cut_cell.json"),
+            JsonSerializer.Serialize(new{
+                source="five-M FunctionalVoxelModel.Approximate, same optimization geometry",
+                coarseSamplesPerAxis=2,fineSamplesPerAxis=4,
+                coarseSolidVolumeMm3=fvmCutCellVolume,
+                fineSolidVolumeMm3=fvmFineVolume,
+                relativeVolumeChangePercent=fractionVolumeChange,
+                partiallyFilledFemCells=fvmCutCells,
+                maximumCellFractionChange=maximumFractionDelta,
+                converged=false,
+                caveat="FVM cut-cell occupancy integration only; this does NOT establish T4/Hex8 stress convergence or certified mechanical strength."
+            },new JsonSerializerOptions{WriteIndented=true}));
         var summary=new{
             mode="free-topology-fvm-simp-oc",scene=Path.GetFileName(path),
             inputBodies=scene.Bodies.Count,obstacles=scene.Obstacles.Count,
@@ -937,6 +977,9 @@ internal static class FreeTopologyDesign
             refinedBinaryVonMisesMpa=refined?.Stress,
             refinedBinaryDisplacementMm=refined?.Displacement,
             meshConvergenceScreenPassed=meshConverged,
+            fiveMCutCellVolumeMm3=fvmFineVolume,
+            fiveMCutCellFractionVolumeChangePercent=fractionVolumeChange,
+            fiveMPartiallyFilledFemCells=fvmCutCells,
             verifiedManufacturingStrength=false,
             binaryMultiphysicsFeasible=finalBinary.AdditionalPass,
             firstFrequencyHz=double.IsFinite(current.FirstHz)?current.FirstHz:(double?)null,
