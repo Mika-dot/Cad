@@ -62,6 +62,23 @@ def inside_stl(points,faces,chunk=32):
         output[first:first+chunk]=(hits.sum(axis=1)%2)==1
     return output
 
+def tetra_volume_fraction(nodes,tets,faces,samples):
+    """Immersed material integration: either 1 barycenter or symmetric 4-point T4 quadrature."""
+    verts=nodes[tets]
+    if samples==1:
+        return inside_stl(verts.mean(axis=1),faces).astype(float)
+    if samples!=4:
+        raise ValueError("Volume samples must be 1 or 4")
+    # Symmetric positive-weight degree-2 integration of constant/linear
+    # material fraction. Each cut tetra receives 0, .25, .5, .75 or 1.
+    a=.5854101966249685
+    b=.1381966011250105
+    base=b*verts.sum(axis=1)
+    fraction=np.zeros(len(tets),dtype=float)
+    for q in range(4):
+        fraction+=inside_stl(base+(a-b)*verts[:,q],faces)*.25
+    return fraction
+
 def grid(lo,hi,cells):
     nx,ny,nz=map(int,cells)
     axis=[np.linspace(lo[i],hi[i],cells[i]+1) for i in range(3)]
@@ -112,7 +129,7 @@ def assemble(nodes,tets,inside,young,poisson,emin=1e-4):
         b[:,5,a]=gz;b[:,5,a+2]=gx
     d=elastic(young,poisson)
     local=np.einsum("tij,ik,tkl->tjl",b,d,b,optimize=True)
-    factors=vol*np.where(inside,1.,emin)
+    factors=vol*(emin+(1-emin)*np.asarray(inside,dtype=float))
     local*=factors[:,None,None]
     dofs=(3*tets[:,:,None]+np.arange(3)).reshape(-1,12)
     row=np.broadcast_to(dofs[:,:,None],local.shape).flatten()
@@ -195,13 +212,13 @@ def solve(nodes,tets,occupied,young,poisson,fixed,
     stress=strains@D.T
     sx,sy,sz,txy,tyz,txz=stress.T
     vm=np.sqrt(.5*((sx-sy)**2+(sy-sz)**2+(sz-sx)**2)+3*(txy*txy+tyz*tyz+txz*txz))
-    material_stress=vm[occupied]
+    material_stress=vm[np.asarray(occupied)>=.25]
     if material_stress.size==0:raise ArithmeticError("STL has no solid T4 elements")
     ux=u.reshape(-1,3)
     # Physical stress/displacement must be measured on ACTUAL solid T4 nodes,
     # not on remote low-stiffness ersatz void nodes (which can displace freely
     # and inflate reported u by orders of magnitude).
-    material_tets=tets[occupied]
+    material_tets=tets[np.asarray(occupied)>0]
     material_nodes=np.unique(material_tets)
     is_material=np.zeros(len(nodes),dtype=bool)
     is_material[material_nodes]=True
@@ -225,12 +242,14 @@ def solve(nodes,tets,occupied,young,poisson,fixed,
         np.linalg.norm(ux[material_nodes],axis=1).max())
     return dict(
         nodeCount=len(nodes),tetraCount=len(tets),
-        solidTetraCount=int(occupied.sum()),supportedNodes=int(fixed.sum()),
+        solidTetraCount=int((np.asarray(occupied)>0).sum()),supportedNodes=int(fixed.sum()),
+        partiallyFilledTetraCount=int(((np.asarray(occupied)>0)&
+            (np.asarray(occupied)<1)).sum()),
         solidConnectedComponents=int(n_connected),
         loadedMaterialConnectedToSupport=bool(loaded_groups and
             loaded_groups.issubset(supported_groups)),
         fractionOfNodalLoadOnErsatzVoid=float(force_on_void/max(all_forces,1e-12)),
-        regularizedSolidVolumeMm3=float(vol[occupied].sum()),
+        regularizedSolidVolumeMm3=float(vol@np.asarray(occupied,dtype=float)),
         maxVonMisesMpa=float(material_stress.max()),
         p95VonMisesMpa=float(np.percentile(material_stress,95)),
         maxDisplacementMm=max_material_displacement,
@@ -239,7 +258,7 @@ def solve(nodes,tets,occupied,young,poisson,fixed,
         complianceNmm=float(f@u),forceN=applied.tolist(),
         reactionN=reactions.tolist(),forceBalanceRelativeError=float(errors))
 
-def run_scene(scene_path,stl_path,cells,subdivide):
+def run_scene(scene_path,stl_path,cells,subdivide,volume_samples=1):
     scene=json.loads(Path(scene_path).read_text(encoding="utf8"))
     patches=[]
     for entry in scene.get("surfacePressurePatches",[]):
@@ -251,11 +270,13 @@ def run_scene(scene_path,stl_path,cells,subdivide):
     lo=np.array(scene["bounds"]["min"],dtype=float)
     hi=np.array(scene["bounds"]["max"],dtype=float)
     nodes,tets=grid(lo,hi,cells)
-    occupied=inside_stl(nodes[tets].mean(axis=1),stl_faces(stl_path))
+    occupied=tetra_volume_fraction(nodes,tets,stl_faces(stl_path),volume_samples)
     fixed=fixtures(nodes,scene["bodies"])
     props=scene["material"]
-    return solve(nodes,tets,occupied,props["youngMpa"],props["poisson"],
+    output=solve(nodes,tets,occupied,props["youngMpa"],props["poisson"],
                  fixed,patches,np.array(cells),lo,hi,subdivide)
+    output["volumeQuadraturePointsPerTetra"]=volume_samples
+    return output
 
 def selftest():
     lo=np.array([0.,0.,0.]);hi=np.array([100.,10.,10.])
@@ -291,6 +312,7 @@ if __name__=="__main__":
     ap.add_argument("--stl")
     ap.add_argument("--cells",type=int,nargs=3,default=[10,7,6])
     ap.add_argument("--pressure-subdivisions",type=int,default=12)
+    ap.add_argument("--volume-quadrature",type=int,choices=[1,4],default=1)
     ap.add_argument("--out")
     args=ap.parse_args()
     if args.self_test:selftest()
@@ -298,10 +320,11 @@ if __name__=="__main__":
         if not args.scene or not args.stl:ap.error("--scene and --stl must both be provided")
         if any(v<2 or v>24 for v in args.cells):ap.error("Cells must be 2..24")
         if not 2<=args.pressure_subdivisions<=32:ap.error("pressure subdivisions must be 2..32")
-        result=run_scene(args.scene,args.stl,args.cells,args.pressure_subdivisions)
+        result=run_scene(args.scene,args.stl,args.cells,
+                         args.pressure_subdivisions,args.volume_quadrature)
         result["model"]="independent Python P1 tetra (6 T4 per Cartesian cell)"
         result["cells"]=args.cells
         result["sourceSTL"]=str(args.stl)
-        result["disclaimer"]="Immersed centroid-classified STL; NOT a conforming tetrahedral surface mesh or certified stress."
+        result["disclaimer"]="Immersed STL T4 with chosen interior quadrature and ersatz background; NOT fitted-surface FEM or certified stress."
         print("T4 INDEPENDENT FEM PASS:",json.dumps(result,sort_keys=True))
         if args.out:Path(args.out).write_text(json.dumps(result,indent=2)+"\n",encoding="utf8")
