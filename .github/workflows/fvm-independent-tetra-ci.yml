@@ -5,6 +5,7 @@ on:
     paths:
       - 'experiments/FvmGenerativeDemo/independent_tetra_fem.py'
       - 'experiments/FvmGenerativeDemo/compare_fem_discretizations.py'
+      - 'experiments/FvmGenerativeDemo/test_fem_comparison.py'
       - '.github/workflows/fvm-independent-tetra-ci.yml'
       - 'experiments/FvmGenerativeDemo/HexFemSurfacePressure.cs'
       - 'experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json'
@@ -23,6 +24,8 @@ jobs:
           python-version: '3.11'
       - name: Install independent sparse linear algebra
         run: python -m pip install --disable-pip-version-check numpy scipy
+      - name: Regression-test conservative cross-discretization admission
+        run: python experiments/FvmGenerativeDemo/test_fem_comparison.py
       - name: Independently derive T4 FEM analytic bar, three resolutions
         run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --self-test
       - name: Strict .NET compile
