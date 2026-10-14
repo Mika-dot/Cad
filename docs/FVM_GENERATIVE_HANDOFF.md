@@ -1,5 +1,31 @@
 # Быстрый вход — ФВМ + FEM + генеративное проектирование
 
+
+> **ПРОВЕРЕННЫЙ НОВЫЙ ЭТАП 14.10.2026 — независимый
+> тетраэдральный FEM по ЭКСПОРТИРОВАННОЙ STL.**
+> Добавлены `experiments/FvmGenerativeDemo/independent_tetra_fem.py`
+> и `compare_fem_discretizations.py`.
+> В отличие от C# Hex8/FVM, solver реализует собственную
+> 3D линейную T4 матрицу, свои STL-ray проверки фактического
+> материала, реальные pressure STL patches, sparse FEM через
+> SciPy, проверку реакций, материальной связности load↔fixed.
+> Вход и аналитический самотест — в
+> [FVM_INDEPENDENT_T4_FEM_VERIFICATION.md](FVM_INDEPENDENT_T4_FEM_VERIFICATION.md).
+> Верификация [CI #38525508905](https://github.com/Mika-dot/Cad/actions/runs/38525508905)
+> **PASS**, включая реальную STL, аналитический стержень
+> на 3 сетках, два T4 разбиения с 1 и 4 материальными
+> квадратурными точками, отдельные ошибки нагрузок на
+> ersatz-узлы и NEGATIVE 2-несвязных-тела тест.
+> **НЕ СЕРТИФИЦИРОВАНО:** бинарный C# Hex8 maxVM=1.446 МПа,
+> Python T4 4point initial maxVM=1.459 МПа,
+> Python T4 4point refined maxVM=2.701 МПа
+> (более подробный отличается от Hex8 на +86.83%).
+> Строгий независимый `--require-agreement` отвергает
+> такой проект. Уровень расхождений требует последующего
+> построения surface-conforming T4 tetra volume mesh
+> и исследования сеточной сходимости реальных stress hot spots.
+>
+
 > **АКТУАЛЬНО — 13.10.2026, ИСПРАВЛЕНО STL→Hex8 PRESSURE И ЗАЩИТА ОТ ЛОЖНОЙ СХОДИМОСТИ.**
 > В `HexFemSurfacePressure.cs` произвольный STL-треугольник
 > теперь отсекается границами пересекаемых фоновых Hex8;
