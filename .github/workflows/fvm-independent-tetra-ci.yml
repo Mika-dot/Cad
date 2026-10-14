@@ -35,6 +35,10 @@ jobs:
         run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/independent-tetra/optimized.stl --cells 10 7 6 --pressure-subdivisions 12 --out output/independent-tetra/tetra_coarse.json
       - name: Independent tetra FEM from identical STL, independent finer grid
         run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/independent-tetra/optimized.stl --cells 14 10 8 --pressure-subdivisions 12 --out output/independent-tetra/tetra_refined.json
+      - name: Independent four-Gauss-point immersed T4 cut-cell integration on actual STL
+        run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/independent-tetra/optimized.stl --cells 10 7 6 --volume-quadrature 4 --pressure-subdivisions 12 --out output/independent-tetra/tetra_coarse_4point.json
+      - name: Independently refine actual STL with four-point T4 material quadrature
+        run: python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/independent-tetra/optimized.stl --cells 14 10 8 --volume-quadrature 4 --pressure-subdivisions 12 --out output/independent-tetra/tetra_refined_4point.json
       - name: Validate independent equilibrium, positive finite stress, refine diagnostics
         run: |
           python - <<'PY'
@@ -57,6 +61,8 @@ jobs:
           PY
       - name: Compare T4 and C# Hex8 physical predictions, retain stress disagreement
         run: python experiments/FvmGenerativeDemo/compare_fem_discretizations.py output/independent-tetra/summary.json output/independent-tetra/tetra_coarse.json output/independent-tetra/tetra_refined.json --out output/independent-tetra/fem_cross_check.json
+      - name: Report independent four-point cut-cell T4 versus Hex8 (no certification claims)
+        run: python experiments/FvmGenerativeDemo/compare_fem_discretizations.py output/independent-tetra/summary.json output/independent-tetra/tetra_coarse_4point.json output/independent-tetra/tetra_refined_4point.json --out output/independent-tetra/fem_cross_check_4point.json
       - name: Strict cross-discretization verification must reject unresolved mechanical disagreement
         run: |
           python - <<'PY'
