@@ -52,6 +52,25 @@ public sealed class FunctionalVoxelTests
     }
 
     [Fact]
+    public void SampledSolidFractionsAreOwnedByFiveMGeometry()
+    {
+        var grid = new FunctionalGrid(new[] { -2.0, -2.0, -2.0 },
+            new[] { 1.0, 1.0, 1.0 }, new[] { 4, 4, 4 });
+        var model = FunctionalVoxelModel.Sample(
+            FunctionalField.Sphere(0, 0, 0, 1.0), grid);
+        Assert.Equal(1.0, model.SampledSolidFraction(
+            new[] { -.25, -.25, -.25 }, new[] { .25, .25, .25 }, 4));
+        Assert.Equal(0.0, model.SampledSolidFraction(
+            new[] { 1.5, 1.5, 1.5 }, new[] { 2.0, 2.0, 2.0 }, 4));
+        var crossing = model.SampledSolidFraction(
+            new[] { .4, -.4, -.4 }, new[] { 1.4, .4, .4 }, 8);
+        Assert.InRange(crossing, 0.01, .99);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            model.SampledSolidFraction(new[] { -3., 0., 0. },
+                new[] { -2., 1., 1. }));
+    }
+
+    [Fact]
     public void AlphaRAlgebraRespectsInteriorSign()
     {
         var a = FunctionalField.Sphere(0, 0, 0, 2);
