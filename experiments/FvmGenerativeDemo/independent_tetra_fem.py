@@ -16,6 +16,7 @@ from pathlib import Path
 import struct
 import numpy as np
 from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 
 def stl_faces(path):
@@ -197,13 +198,44 @@ def solve(nodes,tets,occupied,young,poisson,fixed,
     material_stress=vm[occupied]
     if material_stress.size==0:raise ArithmeticError("STL has no solid T4 elements")
     ux=u.reshape(-1,3)
+    # Physical stress/displacement must be measured on ACTUAL solid T4 nodes,
+    # not on remote low-stiffness ersatz void nodes (which can displace freely
+    # and inflate reported u by orders of magnitude).
+    material_tets=tets[occupied]
+    material_nodes=np.unique(material_tets)
+    is_material=np.zeros(len(nodes),dtype=bool)
+    is_material[material_nodes]=True
+    matnode=np.full(len(nodes),-1,dtype=np.int32)
+    matnode[material_nodes]=np.arange(len(material_nodes),dtype=np.int32)
+    compact=matnode[material_tets]
+    count=len(material_tets)
+    row=np.broadcast_to(compact[:,:,None],(count,4,4)).reshape(-1)
+    col=np.broadcast_to(compact[:,None,:],(count,4,4)).reshape(-1)
+    graph=coo_matrix((np.ones(len(row),dtype=np.int8),(row,col)),
+                     shape=(len(material_nodes),len(material_nodes))).tocsr()
+    n_connected,labels=connected_components(graph,directed=False)
+    support_ids=matnode[np.flatnonzero(fixed & is_material)]
+    force_nodes=np.linalg.norm(f.reshape(-1,3),axis=1)>1e-10
+    load_ids=matnode[np.flatnonzero(force_nodes & is_material)]
+    supported_groups=set(labels[support_ids])
+    loaded_groups=set(labels[load_ids])
+    all_forces=np.linalg.norm(f.reshape(-1,3),axis=1).sum()
+    force_on_void=np.linalg.norm(f.reshape(-1,3)[~is_material],axis=1).sum()
+    max_material_displacement=float(
+        np.linalg.norm(ux[material_nodes],axis=1).max())
     return dict(
         nodeCount=len(nodes),tetraCount=len(tets),
         solidTetraCount=int(occupied.sum()),supportedNodes=int(fixed.sum()),
+        solidConnectedComponents=int(n_connected),
+        loadedMaterialConnectedToSupport=bool(loaded_groups and
+            loaded_groups.issubset(supported_groups)),
+        fractionOfNodalLoadOnErsatzVoid=float(force_on_void/max(all_forces,1e-12)),
         regularizedSolidVolumeMm3=float(vol[occupied].sum()),
         maxVonMisesMpa=float(material_stress.max()),
         p95VonMisesMpa=float(np.percentile(material_stress,95)),
-        maxDisplacementMm=float(np.linalg.norm(ux,axis=1).max()),
+        maxDisplacementMm=max_material_displacement,
+        maxErsatzBackgroundDisplacementMm=float(
+            np.linalg.norm(ux,axis=1).max()),
         complianceNmm=float(f@u),forceN=applied.tolist(),
         reactionN=reactions.tolist(),forceBalanceRelativeError=float(errors))
 
