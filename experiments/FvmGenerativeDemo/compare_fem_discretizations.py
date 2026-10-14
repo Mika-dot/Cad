@@ -10,8 +10,10 @@ from pathlib import Path
 import math
 
 def analyze(hex_summary,t4_coarse,t4_refined):
-    for result in (t4_coarse,t4_refined):
-        assert result["forceBalanceRelativeError"]<1e-5
+    for label, result in (("coarse", t4_coarse), ("refined", t4_refined)):
+        error=result["forceBalanceRelativeError"]
+        if not isinstance(error,(int,float)) or not math.isfinite(error) or not 0<=error<1e-5:
+            raise ValueError(f"Invalid independent T4 {label} force balance: {error!r}")
     baseline={
         "volumeMm3":hex_summary["binaryFvmVolumeMm3"],
         "maxVonMisesMpa":hex_summary["binaryMaximumVonMisesMpa"],
@@ -50,7 +52,15 @@ def analyze(hex_summary,t4_coarse,t4_refined):
           and abs(value["tetraRefinementChangePercent"])<tolerances[key])
         for key,value in differences.items()
     }
-    validTopology=(
+    for label,t4 in (("coarse",t4_coarse),("refined",t4_refined)):
+        fraction=t4["fractionOfNodalLoadOnErsatzVoid"]
+        count=t4["solidConnectedComponents"]
+        if (not isinstance(fraction,(int,float)) or not math.isfinite(fraction)
+                or fraction<0 or fraction>1):
+            raise ValueError(f"Invalid {label} ersatz-only load fraction: {fraction!r}")
+        if not isinstance(count,int) or count<1:
+            raise ValueError(f"Invalid {label} solid component count: {count!r}")
+    validTopology=
         all(t4["solidConnectedComponents"]==1 and
             t4["loadedMaterialConnectedToSupport"] and
             t4["fractionOfNodalLoadOnErsatzVoid"]<.01
