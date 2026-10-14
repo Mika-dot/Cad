@@ -33,6 +33,7 @@ internal sealed partial class HexFem
     private readonly double _emin;
     private readonly double _densityKgMm3;
     private readonly double _simpPower;
+    private readonly bool _fiveMBinaryCutCell;
     private readonly int _nx, _ny, _nz;
     private readonly double _x0, _y0, _z0, _hx, _hy, _hz;
     internal double Volume { get; private set; }
@@ -56,7 +57,8 @@ internal sealed partial class HexFem
         Func<double,double,double,(double X,double Y,double Z)>? nodalForce = null,
         double densityKgMm3=7.85e-6,double simpPower=1,
         IReadOnlyList<HexBoundaryPressure>? boundaryPressures=null,
-        IReadOnlyList<HexTrianglePressure>? trianglePressures=null)
+        IReadOnlyList<HexTrianglePressure>? trianglePressures=null,
+        bool fiveMBinaryCutCell=false)
     {
         if (nx < 1 || ny < 1 || nz < 1 || hx <= 0 || hy <= 0 || hz <= 0 ||
             young <= 0 || poisson <= -1 || poisson >= 0.5 || emin <= 0 || emin >= 1 ||
@@ -67,6 +69,9 @@ internal sealed partial class HexFem
         _x0=x0; _y0=y0; _z0=z0; _hx=hx; _hy=hy; _hz=hz;
         _field=field; _model=model; _emin=emin; _epsF=epsF;
         _densityKgMm3=densityKgMm3;_simpPower=simpPower;
+        if(fiveMBinaryCutCell && model is null)
+            throw new ArgumentException("Five-M cut-cell FEM requires a functional voxel model.");
+        _fiveMBinaryCutCell=fiveMBinaryCutCell;
         var nodeCount=(nx+1)*(ny+1)*(nz+1);
         _rhs=new double[nodeCount*3]; _diag=new double[nodeCount*3];
         _fixed=new bool[nodeCount*3];
@@ -247,8 +252,60 @@ internal sealed partial class HexFem
         }
     }
 
-    private void AssembleElement(Element e,int i,int j,int k)
+
+    // Eight subcells, each integrated by eight Gauss points. The underlying
+    // physical material is the sign of the SAME five-M reconstruction
+    // used by the optimizer and by the STL exporter.
+    private void AssembleFiveMCutCell(Element e,int i,int j,int k)
     {
+        var b=new double[6,24];
+        var db=new double[6,24];
+        var det=_hx*_hy*_hz/64.0;
+        for(int ix=0;ix<2;ix++)for(int iy=0;iy<2;iy++)for(int iz=0;iz<2;iz++)
+        foreach(var gx in Gauss)foreach(var gy in Gauss)foreach(var gz in Gauss)
+        {
+            var xi=-1+ix+(gx+1)*.5;
+            var eta=-1+iy+(gy+1)*.5;
+            var zeta=-1+iz+(gz+1)*.5;
+            var x=_x0+(i+.5*(1+xi))*_hx;
+            var y=_y0+(j+.5*(1+eta))*_hy;
+            var z=_z0+(k+.5*(1+zeta))*_hz;
+            var occupied=Evaluate(x,y,z)>=0?1.0:0.0;
+            Volume+=det*occupied;
+            Shape(xi,eta,zeta,b);
+            for(int r=0;r<6;r++)for(int c=0;c<24;c++)
+            {
+                double sum=0;
+                for(int q=0;q<6;q++)sum+=_elastic[r,q]*b[q,c];
+                db[r,c]=sum;
+            }
+            var factor=det*(_emin+(1-_emin)*occupied);
+            for(int r=0;r<24;r++)for(int c=0;c<24;c++)
+            {
+                double value=0;
+                for(int q=0;q<6;q++)value+=b[q,r]*db[q,c];
+                e.K[24*r+c]+=factor*value;
+            }
+        }
+        // Stress recovery is the existing eight-point screen and must not
+        // be mistaken for stress on a surface-conforming mesh.
+        int index=0;
+        foreach(var xi in Gauss)foreach(var eta in Gauss)foreach(var zeta in Gauss)
+        {
+            var x=_x0+(i+.5*(1+xi))*_hx;
+            var y=_y0+(j+.5*(1+eta))*_hy;
+            var z=_z0+(k+.5*(1+zeta))*_hz;
+            e.FractionAtGauss[index++]=Evaluate(x,y,z)>=0?1:0;
+        }
+    }
+
+    private void AssembleElement(Element e,int i,int j,int k)
+    { 
+        if(_fiveMBinaryCutCell)
+        {
+            AssembleFiveMCutCell(e,i,j,k);
+            return;
+        }
         var b=new double[6,24]; var db=new double[6,24];
         var det=_hx*_hy*_hz/8;
         var q=0;
