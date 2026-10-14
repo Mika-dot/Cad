@@ -329,3 +329,44 @@ L2-разница всех узловых сил **1.738×10⁻¹⁵**.
 а отдельный тест повторяет FEM-расчёт и проверяет
 отсутствие `optimized.stl`.
 [Полный тест физического отказа](https://github.com/Mika-dot/Cad/actions/runs/38429308621).
+
+
+### Независимый FEM-контроль экспортированной STL (новое, 14.10.2026)
+
+[**Полная методика, формулы, команды и фактические числа**](../../docs/FVM_INDEPENDENT_T4_FEM_VERIFICATION.md).
+
+Теперь программа содержит второй FEM-решатель
+`independent_tetra_fem.py` на Python/NumPy/SciPy:
+**3D T4 (4 узла), 6 тетраэдров на фоновую ячейку**,
+самостоятельное считывание замкнутой `optimized.stl`
+и независимую классификацию её заполненности пересечением луча
+с STL-треугольниками. Нагрузка берётся из настоящих ориентированных
+STL pressure-patches. Результаты не используют C# Hex8 stiffness
+и не обращаются к ФВМ `M0...M4`.
+
+```powershell
+python -m pip install numpy scipy
+python experiments/FvmGenerativeDemo/independent_tetra_fem.py --self-test
+python experiments/FvmGenerativeDemo/independent_tetra_fem.py --scene experiments/FvmGenerativeDemo/multi_scene_surface_pressure.json --stl output/pressure/optimized.stl --cells 10 7 6 --volume-quadrature 4 --out output/pressure/tetra.json
+```
+
+На реальной STL **численно доказано, что грубая FEM-сетка
+не даёт стабильную оценку пикового напряжения**:
+бинарный Hex8: 1.446 МПа;
+T4 (четыре точки материала, грубая сетка): 1.459 МПа;
+T4 (та же STL, более подробная сетка): **2.701 МПа**.
+Сходство первых двух значений не означает точности —
+последнее отличается от Hex8 на 86.83%.
+`compare_fem_discretizations.py --require-agreement`
+**отвергает** такую постановку. Сам T4 solver проверен
+на аналитическом стержне с 3 сетками;
+отдельный отрицательный тест распознаёт две разорванные
+материальные детали, хотя разреженная матрица
+по ersatz-жёсткости формально имеет решение.
+
+[**Успешный CI T4+STL с отрицательными проверками**](https://github.com/Mika-dot/Cad/actions/runs/38525508905)
+· [файлы расчёта STL/JSON](https://github.com/Mika-dot/Cad/actions/runs/38525508905/artifacts/11876210006).
+
+**Это независимая тетраэдральная дискретизация, но ещё не
+surface-conforming tetra FEM.** Настоящая сертификация
+точности/прочности остаётся невыполненной.
