@@ -314,6 +314,28 @@ def selftest():
         print(f"T4 ANALYTIC PASS cells={cells} u={r['maxDisplacementMm']:.9f}mm "
               f"vm={r['maxVonMisesMpa']:.5f}MPa Rx={r['reactionN'][0]:.6f}N "
               f"V={r['regularizedSolidVolumeMm3']:.2f}mm3")
+    # Negative physical fixture: two visually plausible bars separated by
+    # an actual gap. Ersatz stiffness still yields a numerical equilibrium,
+    # but it MUST NOT be called a mechanically connected load path.
+    def block(xa,xb):
+        vertices=np.array([[xa,0,0],[xb,0,0],[xa,10,0],[xb,10,0],
+                           [xa,0,10],[xb,0,10],[xa,10,10],[xb,10,10]])
+        return vertices[np.asarray(indices)],vertices
+    f0,c0=block(0,30)
+    f1,c1=block(90,120)
+    gap_faces=np.concatenate((f0,f1))
+    lo=np.array([0.,0.,0.]);hi=np.array([120.,10.,10.])
+    cells=np.array([12,2,2])
+    nodes,tets=grid(lo,hi,cells)
+    occupied=tetra_volume_fraction(nodes,tets,gap_faces,4)
+    pressure=[(c1[[1,3,7]],10.),(c1[[1,7,5]],10.)]
+    result=solve(nodes,tets,occupied,200000,.0,nodes[:,0]<1e-8,
+                 pressure,cells,lo,hi,subdivide=10)
+    assert result["solidConnectedComponents"]>=2,result
+    assert not result["loadedMaterialConnectedToSupport"],result
+    print("T4 DISCONNECTED LOAD PATH REJECTED: components=",
+          result["solidConnectedComponents"],
+          "physical support-to-pressure continuity=False")
     return results
 
 if __name__=="__main__":
