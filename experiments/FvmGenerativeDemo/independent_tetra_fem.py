@@ -214,6 +214,12 @@ def solve(nodes,tets,occupied,young,poisson,fixed,
     vm=np.sqrt(.5*((sx-sy)**2+(sy-sz)**2+(sz-sx)**2)+3*(txy*txy+tyz*tyz+txz*txz))
     material_stress=vm[np.asarray(occupied)>=.25]
     if material_stress.size==0:raise ArithmeticError("STL has no solid T4 elements")
+    fractions=np.asarray(occupied,dtype=float)
+    full_stresses=vm[fractions>.999]
+    cut_stresses=vm[(fractions>0)&(fractions<.999)]
+    observed=np.where(fractions>=.25)[0]
+    hotspot=observed[np.argmax(vm[observed])]
+    hotspot_xyz=nodes[tets[hotspot]].mean(axis=0)
     ux=u.reshape(-1,3)
     # Physical stress/displacement must be measured on ACTUAL solid T4 nodes,
     # not on remote low-stiffness ersatz void nodes (which can displace freely
@@ -252,6 +258,11 @@ def solve(nodes,tets,occupied,young,poisson,fixed,
         regularizedSolidVolumeMm3=float(vol@np.asarray(occupied,dtype=float)),
         maxVonMisesMpa=float(material_stress.max()),
         p95VonMisesMpa=float(np.percentile(material_stress,95)),
+        p99VonMisesMpa=float(np.percentile(material_stress,99)),
+        maximumFullyFilledVonMisesMpa=float(full_stresses.max()) if full_stresses.size else None,
+        maximumCutCellVonMisesMpa=float(cut_stresses.max()) if cut_stresses.size else None,
+        worstStressAtMm=hotspot_xyz.tolist(),
+        worstStressTetraMaterialFraction=float(fractions[hotspot]),
         maxDisplacementMm=max_material_displacement,
         maxErsatzBackgroundDisplacementMm=float(
             np.linalg.norm(ux,axis=1).max()),
