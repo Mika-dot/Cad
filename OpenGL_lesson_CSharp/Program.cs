@@ -18,6 +18,11 @@ namespace OpenGL_lesson_CSharp
                 FvmRoute.MakeDemoMaps(folder);
                 return;
             }
+            if (command == "--make-potential")
+            {
+                FvmRoute.MakePotentials(folder);
+                return;
+            }
             if (command == "--solve-maps")
             {
                 Console.Write(new FvmRoute(folder).RoutesReport());

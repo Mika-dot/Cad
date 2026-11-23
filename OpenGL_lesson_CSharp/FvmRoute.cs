@@ -177,6 +177,11 @@ namespace OpenGL_lesson_CSharp
         public static void MakeDemoMaps(string folder)
         {
             DemoScene.WriteMaps(folder);
+            MakePotentials(folder);
+        }
+
+        public static void MakePotentials(string folder)
+        {
             FvmRoute builder = new FvmRoute(folder, false);
             for (int mode = 0; mode < 2; mode++) builder.WritePotential(mode);
         }
