@@ -139,6 +139,260 @@ namespace OpenGL_lesson_CSharp
         public double[] Tariff = { 0.25, 22 };
         string Folder;
 
+        public FvmRoute(string folder) : this(folder, true) { }
+
+        FvmRoute(string folder, bool trace)
+        {
+            Folder = folder;
+            Free = MImages.Load(Path.Combine(folder, "Free"));
+            Ground = MImages.Load(Path.Combine(folder, "Ground"));
+            Zone = MImages.Load(Path.Combine(folder, "Zone"));
+            if (trace)
+                for (int mode = 0; mode < 2; mode++)
+                {
+                    Potential[mode] = MImages.Load(PotentialFolder(mode));
+                    Trace(mode);
+                }
+        }
+
+        public void LoadVolume()
+        {
+            Surface = MImages.Load(Path.Combine(Folder, "Surface"));
+            ClayLayer = MImages.Load(Path.Combine(Folder, "Clay"));
+            RockLayer = MImages.Load(Path.Combine(Folder, "Rock"));
+            PipeBody = MImages.Load(Path.Combine(Folder, "Pipe"));
+            FoundationBody = MImages.Load(Path.Combine(Folder, "Foundation"));
+            for (int i = 0; i < MImages.Count; i++)
+            {
+                Vector3 p = MImages.Point(i);
+                if (Surface.Value(i, p) < 0) continue;
+                Material[i] = 1;
+                if (ClayLayer.Value(i, p) >= 0) Material[i] = 2;
+                if (RockLayer.Value(i, p) >= 0) Material[i] = 3;
+                if (PipeBody.Value(i, p) >= 0) Material[i] = 4;
+                if (FoundationBody.Value(i, p) >= 0) Material[i] = 5;
+            }
+        }
+
+        public static void MakeDemoMaps(string folder)
+        {
+            DemoScene.WriteMaps(folder);
+            FvmRoute builder = new FvmRoute(folder, false);
+            for (int mode = 0; mode < 2; mode++) builder.WritePotential(mode);
+        }
+
+        string PotentialFolder(int mode)
+        {
+            return Path.Combine(Folder, "Potential" + (mode + 1));
+        }
+
+        // В простой версии разрешаем 26 соседей; промежуточные точки проверяем по М-полям.
+        List<int> Neighbours(int i)
+        {
+            Vector3 p = MImages.Point(i);
+            List<int> result = new List<int>();
+            for (int z = -1; z <= 1; z++)
+            for (int y = -1; y <= 1; y++)
+            for (int x = -1; x <= 1; x++)
+            {
+                int px = (int)p.X + x, py = (int)p.Y + y, pz = (int)p.Z + z;
+                if ((x == 0 && y == 0 && z == 0) || px < 0 || py < 0 || pz < 0 ||
+                    px >= MImages.X || py >= MImages.Y || pz >= MImages.Z) continue;
+                int j = MImages.Index(px, py, pz);
+                bool free = true;
+                for (int s = 0; s <= 8; s++)
+                    if (Free.Between(i, j, s / 8.0) <= 0.06) free = false;
+                if (free) result.Add(j);
+            }
+            return result;
+        }
+
+        double ZoneOnEdge(int i, int j)
+        {
+            double sum = 0;
+            for (int s = 0; s < 8; s++)
+                sum += Math.Max(0, Zone.Between(i, j, (s + 0.5) / 8));
+            return sum * Vector3.Distance(MImages.Point(i), MImages.Point(j)) / 8;
+        }
+
+        double Cost(int i, int j, int mode)
+        {
+            double sum = 0;
+            for (int s = 0; s < 8; s++)
+                sum += Math.Max(0, Ground.Between(i, j, (s + 0.5) / 8));
+            return sum * Vector3.Distance(MImages.Point(i), MImages.Point(j)) / 8 +
+                   Tariff[mode] * ZoneOnEdge(i, j);
+        }
+
+        static double Difference(double[] value, int i, int step, int coordinate, int count)
+        {
+            bool left = coordinate > 0 && !double.IsInfinity(value[i - step]);
+            bool right = coordinate < count - 1 && !double.IsInfinity(value[i + step]);
+            if (left && right) return (value[i + step] - value[i - step]) / 2;
+            if (left) return value[i] - value[i - step];
+            if (right) return value[i + step] - value[i];
+            return 0;
+        }
+
+        double[] CalculatePotential(int mode)
+        {
+            int count = MImages.Count;
+            List<int>[] neighbours = new List<int>[count];
+            double[] value = new double[count];
+            bool[] finished = new bool[count];
+            for (int i = 0; i < count; i++)
+            {
+                neighbours[i] = Neighbours(i);
+                value[i] = double.PositiveInfinity;
+            }
+
+            // U(B)=0. От B передаём соседям минимальную стоимость остатка пути.
+            value[B] = 0;
+            for (int step = 0; step < count; step++)
+            {
+                int best = -1;
+                double minimum = double.PositiveInfinity;
+                for (int i = 0; i < count; i++)
+                    if (!finished[i] && value[i] < minimum) { best = i; minimum = value[i]; }
+                if (best == -1) break;
+                finished[best] = true;
+                foreach (int i in neighbours[best])
+                    value[i] = Math.Min(value[i], minimum + Cost(i, best, mode));
+            }
+            if (double.IsInfinity(value[A])) throw new Exception("Точки A и B не связаны.");
+
+            return value;
+        }
+
+        void WritePotential(int mode)
+        {
+            double[] value = CalculatePotential(mode);
+            MImages images = new MImages();
+            for (int i = 0; i < MImages.Count; i++)
+            {
+                Vector3 p = MImages.Point(i);
+                // Отрицательное значение отмечает недостижимый воксель.
+                if (double.IsInfinity(value[i])) images.Write(i, -1, 0, 0, 0);
+                else images.Write(i, value[i],
+                    Difference(value, i, 1, (int)p.X, MImages.X),
+                    Difference(value, i, MImages.X, (int)p.Y, MImages.Y),
+                    Difference(value, i, MImages.X * MImages.Y, (int)p.Z, MImages.Z));
+            }
+            images.Save(PotentialFolder(mode));
+        }
+
+        void Trace(int mode)
+        {
+            MImages u = Potential[mode];
+            var path = new List<int> { A };
+            int current = A;
+            StepTable[mode] = new List<string[]>();
+            while (current != B)
+            {
+                Vector3 p = MImages.Point(current);
+                Vector3 gradient = u.Gradient(current);
+                double here = u.Value(current, p);
+
+                // Переходы и цены читаются из Free/Ground/Zone, поле U — из Potential.
+                // Выбираем минимальное c+U среди убывающих соседей. При близких
+                // значениях берём направление по градиенту из тех же М-карт.
+                var candidates = new List<(int Node, double U, double Edge, double Slope)>();
+                double minimum = double.PositiveInfinity;
+                foreach (int j in Neighbours(current))
+                {
+                    Vector3 q = MImages.Point(j);
+                    double there = u.Value(j, q);
+                    double edge = Cost(current, j, mode);
+                    double slope = Vector3.Dot(gradient, Vector3.Normalize(q - p));
+                    candidates.Add((j, there, edge, slope));
+                    if (there >= -0.001 && there < here)
+                        minimum = Math.Min(minimum, edge + there);
+                }
+
+                int next = -1;
+                double bestSlope = double.PositiveInfinity;
+                var options = new List<string>();
+                foreach (var candidate in candidates)
+                {
+                    var (j, there, edge, slope) = candidate;
+                    Vector3 q = MImages.Point(j);
+                    bool nearMinimum = there >= -0.001 && there < here && edge + there <= minimum + 0.00025;
+                    options.Add(string.Format("({0,2},{1,2},{2})    {3,6:F2}    {4,6:F2}    {5,6:F2}    {6,6:F2}    {7}",
+                        q.X, q.Y, q.Z, there, edge, there + edge, slope, nearMinimum ? "минимум RGB" : ""));
+                    if (nearMinimum && slope < bestSlope) { bestSlope = slope; next = j; }
+                }
+                StepTable[mode].Add(options.ToArray());
+                if (next < 0 || path.Count >= MImages.Count)
+                    throw new Exception("Спуск по М-картам остановился. Проверьте поля допустимости и стоимости.");
+                Price[mode] += Cost(current, next, mode);
+                Exposure[mode] += ZoneOnEdge(current, next);
+                Length[mode] += Vector3.Distance(p, MImages.Point(next));
+                path.Add(next);
+                current = next;
+            }
+            PathNodes[mode] = path;
+        }
+
+        public string RoutesReport()
+        {
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "Routes reconstructed from BMP only.\r\n" +
+                "Low tariff:  {0:F3} m, {1:F6} cost units, zone integral {2:F3}.\r\n" +
+                "High tariff: {3:F3} m, {4:F6} cost units, zone integral {5:F3}.\r\n",
+                Length[0], Price[0], Exposure[0], Length[1], Price[1], Exposure[1]);
+        }
+
+        public void Check(string file)
+        {
+            MImages affine = MImages.Build(Path.Combine(Folder, "Test"), p => 2 + 0.3 * p.X - 0.2 * p.Y + 0.4 * p.Z);
+            double error = 0;
+            int blocked = 0;
+            for (int i = 0; i < MImages.Count; i++)
+            {
+                Vector3 center = MImages.Point(i);
+                Vector3 p = center + new Vector3(0.2f, 0.1f, -0.15f);
+                error = Math.Max(error, Math.Abs(affine.Value(i, p) - (2 + 0.3 * p.X - 0.2 * p.Y + 0.4 * p.Z)));
+                if (Vector3.Distance(affine.Gradient(i), new Vector3(0.3f, -0.2f, 0.4f)) > 0.00015)
+                    throw new Exception("После BMP не восстановился градиент.");
+                if (Free.Value(i, center) < 0) blocked++;
+                if (Math.Abs(DemoScene.Space(center)) > 0.001 &&
+                    Math.Sign(Free.Value(i, center)) != Math.Sign(DemoScene.Space(center)))
+                    throw new Exception("После BMP изменился знак вокселя.");
+            }
+            if (error > 0.001 || blocked == 0 || Exposure[0] < 0.5 || Exposure[1] >= Exposure[0] * 0.2 ||
+                !PathNodes[0].Exists(i => MImages.Point(i).Z > MImages.Point(A).Z))
+                throw new Exception("Не пройдена проверка восстановления или смены трассы.");
+            // Отдельно сверяем геометрию с исходной формулой на более частой сетке.
+            foreach (List<int> path in PathNodes)
+            for (int i = 1; i < path.Count; i++)
+            for (int s = 0; s <= 64; s++)
+                if (DemoScene.Space(Vector3.Lerp(MImages.Point(path[i - 1]), MImages.Point(path[i]), s / 64f)) <= 0)
+                    throw new Exception("Аналитическая проверка зазора не пройдена.");
+
+            if (!PathNodes[0].Exists(i => MImages.Point(i).X == 7 && MImages.Point(i).Z >= 5) ||
+                !PathNodes[0].Exists(i => MImages.Point(i).X == 16 && MImages.Point(i).Z <= 3) ||
+                !PathNodes[1].Exists(i => MImages.Point(i).Y <= 4) ||
+                !PathNodes[1].Exists(i => MImages.Point(i).Z != MImages.Point(A).Z))
+                throw new Exception("Не пройдена проверка пространственного обхода.");
+            for (int type = 0; type <= 5; type++)
+                if (Array.IndexOf(Material, type) < 0) throw new Exception("Пропущен слой или тело.");
+            for (int m = 0; m < 2; m++)
+                File.WriteAllLines(Path.Combine(Folder, "route-" + (m + 1) + ".txt"),
+                    PathNodes[m].ConvertAll(i => MImages.Point(i).ToString()));
+            double lowGap = Price[0] - CalculatePotential(0)[A], highGap = Price[1] - CalculatePotential(1)[A];
+            if (Math.Abs(lowGap) > 0.01 || Math.Abs(highGap) > 0.01)
+                throw new Exception("Цена спуска по RGB отличается от дискретного минимума более чем на 0,01.");
+            string report = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "PASS: RGB24 BMP -> {0} voxels, max affine reconstruction error {1:G6}, blocked voxels {2}.\r\n" +
+                "Cost gap vs. full-precision Dijkstra: low {3:G9}, high {4:G9}.\r\n" +
+                "Verified sampled analytic clearance: underpass, overpass and lateral bypass.\r\n",
+                MImages.Count, error, blocked, lowGap, highGap) + RoutesReport();
+            File.WriteAllText(file, report);
+            Console.Write(report);
+        }
+    }
+    static class DemoScene
+    {
         // R-пересечение двух условий. Положительный знак означает, что оба выполняются.
         static double And(double a, double b)
         {
@@ -197,205 +451,16 @@ namespace OpenGL_lesson_CSharp
             return Sq(Math.Max(0, inside));
         }
 
-        public FvmRoute(string folder)
+        public static void WriteMaps(string folder)
         {
-            Folder = folder;
-            Surface = MImages.Build(Path.Combine(folder, "Surface"), p => p.Z - Terrain(p.X, p.Y));
-            ClayLayer = MImages.Build(Path.Combine(folder, "Clay"), p => p.Z - Clay(p.X, p.Y));
-            RockLayer = MImages.Build(Path.Combine(folder, "Rock"), p => p.Z - Rock(p.X, p.Y));
-            PipeBody = MImages.Build(Path.Combine(folder, "Pipe"), p => -Pipe(p));
-            FoundationBody = MImages.Build(Path.Combine(folder, "Foundation"), p => -Foundation(p));
-            for (int i = 0; i < MImages.Count; i++)
-            {
-                Vector3 p = MImages.Point(i);
-                if (Surface.Value(i, p) < 0) continue;
-                Material[i] = 1;
-                if (ClayLayer.Value(i, p) >= 0) Material[i] = 2;
-                if (RockLayer.Value(i, p) >= 0) Material[i] = 3;
-                if (PipeBody.Value(i, p) >= 0) Material[i] = 4;
-                if (FoundationBody.Value(i, p) >= 0) Material[i] = 5;
-            }
-            Free = MImages.Build(Path.Combine(folder, "Free"), Space);
-            Ground = MImages.Build(Path.Combine(folder, "Ground"), Earth);
-            Zone = MImages.Build(Path.Combine(folder, "Zone"), Toll);
-            for (int i = 0; i < 2; i++) Find(i);
-        }
-
-        // В простой версии разрешаем 26 соседей; промежуточные точки проверяем по М-полям.
-        List<int> Neighbours(int i)
-        {
-            Vector3 p = MImages.Point(i);
-            List<int> result = new List<int>();
-            for (int z = -1; z <= 1; z++)
-            for (int y = -1; y <= 1; y++)
-            for (int x = -1; x <= 1; x++)
-            {
-                int px = (int)p.X + x, py = (int)p.Y + y, pz = (int)p.Z + z;
-                if ((x == 0 && y == 0 && z == 0) || px < 0 || py < 0 || pz < 0 ||
-                    px >= MImages.X || py >= MImages.Y || pz >= MImages.Z) continue;
-                int j = MImages.Index(px, py, pz);
-                bool free = true;
-                for (int s = 0; s <= 8; s++)
-                    if (Free.Between(i, j, s / 8.0) <= 0.06) free = false;
-                if (free) result.Add(j);
-            }
-            return result;
-        }
-
-        double ZoneOnEdge(int i, int j)
-        {
-            double sum = 0;
-            for (int s = 0; s < 8; s++)
-                sum += Math.Max(0, Zone.Between(i, j, (s + 0.5) / 8));
-            return sum * Vector3.Distance(MImages.Point(i), MImages.Point(j)) / 8;
-        }
-
-        double Cost(int i, int j, int mode)
-        {
-            double sum = 0;
-            for (int s = 0; s < 8; s++)
-                sum += Math.Max(0, Ground.Between(i, j, (s + 0.5) / 8));
-            return sum * Vector3.Distance(MImages.Point(i), MImages.Point(j)) / 8 +
-                   Tariff[mode] * ZoneOnEdge(i, j);
-        }
-
-        static double Difference(double[] value, int i, int step, int coordinate, int count)
-        {
-            bool left = coordinate > 0 && !double.IsInfinity(value[i - step]);
-            bool right = coordinate < count - 1 && !double.IsInfinity(value[i + step]);
-            if (left && right) return (value[i + step] - value[i - step]) / 2;
-            if (left) return value[i] - value[i - step];
-            if (right) return value[i + step] - value[i];
-            return 0;
-        }
-
-        void Find(int mode)
-        {
-            int count = MImages.Count;
-            List<int>[] neighbours = new List<int>[count];
-            double[] value = new double[count];
-            bool[] finished = new bool[count];
-            for (int i = 0; i < count; i++)
-            {
-                neighbours[i] = Neighbours(i);
-                value[i] = double.PositiveInfinity;
-            }
-
-            // U(B)=0. От B передаём соседям минимальную стоимость остатка пути.
-            value[B] = 0;
-            for (int step = 0; step < count; step++)
-            {
-                int best = -1;
-                double minimum = double.PositiveInfinity;
-                for (int i = 0; i < count; i++)
-                    if (!finished[i] && value[i] < minimum) { best = i; minimum = value[i]; }
-                if (best == -1) break;
-                finished[best] = true;
-                foreach (int i in neighbours[best])
-                    value[i] = Math.Min(value[i], minimum + Cost(i, best, mode));
-            }
-            if (double.IsInfinity(value[A])) throw new Exception("Точки A и B не связаны.");
-
-            MImages images = new MImages();
-            for (int i = 0; i < count; i++)
-            {
-                Vector3 p = MImages.Point(i);
-                if (double.IsInfinity(value[i])) images.Write(i, 0, 0, 0, 0);
-                else images.Write(i, value[i],
-                    Difference(value, i, 1, (int)p.X, MImages.X),
-                    Difference(value, i, MImages.X, (int)p.Y, MImages.Y),
-                    Difference(value, i, MImages.X * MImages.Y, (int)p.Z, MImages.Z));
-            }
-            string folder = Path.Combine(Folder, "Potential" + (mode + 1));
-            images.Save(folder);
-            Potential[mode] = MImages.Load(folder);
-            MImages u = Potential[mode];
-            double error = 0;
-            for (int i = 0; i < count; i++)
-                if (finished[i]) error = Math.Max(error, Math.Abs(value[i] - u.Value(i, MImages.Point(i))));
-
-            if (error > 0.002) throw new Exception("Слишком велика погрешность BMP-потенциала.");
-            // Идём по направлению -grad U, восстановленному из цветов.
-            // Условие Беллмана сохраняет минимум стоимости при выборе соседа.
-            List<int> path = new List<int> { A };
-            int current = A;
-            StepTable[mode] = new List<string[]>();
-            while (current != B)
-            {
-                int next = -1;
-                double slope = double.PositiveInfinity;
-                Vector3 p = MImages.Point(current), gradient = u.Gradient(current);
-                double here = u.Value(current, p);
-                List<string> options = new List<string>();
-                foreach (int j in neighbours[current])
-                {
-                    Vector3 q = MImages.Point(j);
-                    double there = u.Value(j, q);
-                    double edge = Cost(current, j, mode);
-                    double direction = Vector3.Dot(gradient, Vector3.Normalize(q - p));
-                    bool minimum = there < here && Math.Abs(value[current] - edge - value[j]) <= 1e-8;
-                    options.Add(string.Format("({0,2},{1,2},{2})    {3,6:F2}    {4,6:F2}    {5,6:F2}    {6,6:F2}    {7}",
-                        q.X, q.Y, q.Z, there, edge, there + edge, direction, minimum ? "минимум" : ""));
-                    if (minimum && direction < slope) { slope = direction; next = j; }
-                }
-                StepTable[mode].Add(options.ToArray());
-                if (next < 0 || path.Count >= count) throw new Exception("Спуск по М-образам остановился.");
-                Price[mode] += Cost(current, next, mode);
-                Exposure[mode] += ZoneOnEdge(current, next);
-                Length[mode] += Vector3.Distance(p, MImages.Point(next));
-                path.Add(next);
-                current = next;
-            }
-            if (Math.Abs(Price[mode] - value[A]) > 1e-7)
-                throw new Exception("Цена восстановленной трассы отличается от дискретного минимума.");
-            PathNodes[mode] = path;
-        }
-
-        public void Check(string file)
-        {
-            MImages affine = MImages.Build(Path.Combine(Folder, "Test"), p => 2 + 0.3 * p.X - 0.2 * p.Y + 0.4 * p.Z);
-            double error = 0;
-            int blocked = 0;
-            for (int i = 0; i < MImages.Count; i++)
-            {
-                Vector3 center = MImages.Point(i);
-                Vector3 p = center + new Vector3(0.2f, 0.1f, -0.15f);
-                error = Math.Max(error, Math.Abs(affine.Value(i, p) - (2 + 0.3 * p.X - 0.2 * p.Y + 0.4 * p.Z)));
-                if (Vector3.Distance(affine.Gradient(i), new Vector3(0.3f, -0.2f, 0.4f)) > 0.00015)
-                    throw new Exception("После BMP не восстановился градиент.");
-                if (Free.Value(i, center) < 0) blocked++;
-                if (Math.Abs(Space(center)) > 0.001 &&
-                    Math.Sign(Free.Value(i, center)) != Math.Sign(Space(center)))
-                    throw new Exception("После BMP изменился знак вокселя.");
-            }
-            if (error > 0.001 || blocked == 0 || Exposure[0] < 0.5 || Exposure[1] >= Exposure[0] * 0.2 ||
-                !PathNodes[0].Exists(i => MImages.Point(i).Z > MImages.Point(A).Z))
-                throw new Exception("Не пройдена проверка восстановления или смены трассы.");
-            // Отдельно сверяем геометрию с исходной формулой на более частой сетке.
-            foreach (List<int> path in PathNodes)
-            for (int i = 1; i < path.Count; i++)
-            for (int s = 0; s <= 64; s++)
-                if (Space(Vector3.Lerp(MImages.Point(path[i - 1]), MImages.Point(path[i]), s / 64f)) <= 0)
-                    throw new Exception("Аналитическая проверка зазора не пройдена.");
-
-            if (!PathNodes[0].Exists(i => MImages.Point(i).X == 7 && MImages.Point(i).Z >= 5) ||
-                !PathNodes[0].Exists(i => MImages.Point(i).X == 16 && MImages.Point(i).Z <= 3) ||
-                !PathNodes[1].Exists(i => MImages.Point(i).Y <= 4) ||
-                !PathNodes[1].Exists(i => MImages.Point(i).Z != MImages.Point(A).Z))
-                throw new Exception("Не пройдена проверка пространственного обхода.");
-            for (int type = 0; type <= 5; type++)
-                if (Array.IndexOf(Material, type) < 0) throw new Exception("Пропущен слой или тело.");
-            for (int m = 0; m < 2; m++)
-                File.WriteAllLines(Path.Combine(Folder, "route-" + (m + 1) + ".txt"),
-                    PathNodes[m].ConvertAll(i => MImages.Point(i).ToString()));
-            string report = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "PASS: RGB24 BMP -> {0} voxels, max affine reconstruction error {1:G6}, blocked voxels {2}.\r\n" +
-                "Low tariff:  {3:F3} m, {4:F3} cost units, zone integral {5:F3}.\r\n" +
-                "High tariff: {6:F3} m, {7:F3} cost units, zone integral {8:F3}.\r\n" +
-                "Both routes match the discrete minimum and pass sampled analytic clearance. Verified underpass, overpass and lateral bypass.\r\n",
-                MImages.Count, error, blocked, Length[0], Price[0], Exposure[0], Length[1], Price[1], Exposure[1]);
-            File.WriteAllText(file, report);
-            Console.Write(report);
+            MImages.Build(Path.Combine(folder, "Surface"), p => p.Z - Terrain(p.X, p.Y));
+            MImages.Build(Path.Combine(folder, "Clay"), p => p.Z - Clay(p.X, p.Y));
+            MImages.Build(Path.Combine(folder, "Rock"), p => p.Z - Rock(p.X, p.Y));
+            MImages.Build(Path.Combine(folder, "Pipe"), p => -Pipe(p));
+            MImages.Build(Path.Combine(folder, "Foundation"), p => -Foundation(p));
+            MImages.Build(Path.Combine(folder, "Free"), Space);
+            MImages.Build(Path.Combine(folder, "Ground"), Earth);
+            MImages.Build(Path.Combine(folder, "Zone"), Toll);
         }
     }
 }

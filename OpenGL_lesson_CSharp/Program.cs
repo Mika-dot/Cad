@@ -1,28 +1,40 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Windows.Forms;
 
 namespace OpenGL_lesson_CSharp
 {
     static class Program
     {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
         [STAThread]
         static void Main(string[] args)
         {
-            string folder = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "M-images");
-            if (args.Length == 1 && args[0] == "--check")
+            string folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "M-images");
+            string command = args.Length == 0 ? "" : args[0];
+            if (args.Length == 2) folder = Path.GetFullPath(args[1]);
+
+            if (command == "--make-maps")
             {
-                new FvmRoute(folder).Check(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "check.txt"));
+                FvmRoute.MakeDemoMaps(folder);
+                return;
+            }
+            if (command == "--solve-maps")
+            {
+                Console.Write(new FvmRoute(folder).RoutesReport());
+                return;
+            }
+            if (command != "--from-maps") FvmRoute.MakeDemoMaps(folder);
+            FvmRoute route = new FvmRoute(folder);
+            route.LoadVolume();
+            if (command == "--check")
+            {
+                route.Check(Path.Combine(folder, "check.txt"));
                 return;
             }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            SharpGLForm form = new SharpGLForm(new FvmRoute(folder));
-            if (args.Length == 3 && args[0] == "--capture") form.StartView(int.Parse(args[1]), args[2]);
+            SharpGLForm form = new SharpGLForm(route);
+            if (args.Length == 3 && command == "--capture") form.StartView(int.Parse(args[1]), args[2]);
             Application.Run(form);
         }
     }
